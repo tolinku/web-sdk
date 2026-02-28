@@ -1,0 +1,56 @@
+{
+  "name": "@tolinku/web-sdk",
+  "version": "0.1.0",
+  "description": "Tolinku Web SDK for deep linking, analytics, referrals, smart banners, and in-app messages",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "tolinku",
+    "deep-linking",
+    "universal-links",
+    "app-links",
+    "analytics",
+    "referrals",
+    "smart-banner",
+    "deferred-deep-linking"
+  ],
+  "author": "Tolinku",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tolinku/web-sdk.git"
+  },
+  "homepage": "https://tolinku.com/docs",
+  "bugs": {
+    "url": "https://github.com/tolinku/web-sdk/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "jsdom": "^28.1.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^3.0.0"
+  },
+  "sideEffects": false
+}
