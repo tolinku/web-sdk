@@ -1,5 +1,6 @@
 import { HttpClient, TolinkuError } from './client.js';
 import { Analytics } from './analytics.js';
+import { Ecommerce } from './ecommerce.js';
 import { Referrals } from './referrals.js';
 import { Deferred } from './deferred.js';
 import { Banners } from './banners.js';
@@ -16,6 +17,8 @@ export class Tolinku {
 
   /** Analytics: track custom events */
   readonly analytics: Analytics;
+  /** Ecommerce: track purchases, carts, products, revenue */
+  readonly ecommerce: Ecommerce;
   /** Referrals: create, complete, milestone, leaderboard */
   readonly referrals: Referrals;
   /** Deferred deep links: claim by token or signals */
@@ -49,6 +52,7 @@ export class Tolinku {
 
     this.client = new HttpClient(resolvedConfig);
     this.analytics = new Analytics(this.client);
+    this.ecommerce = new Ecommerce(this.client, () => this._userId);
     this.referrals = new Referrals(this.client);
     this.deferred = new Deferred(this.client);
     this.banners = new Banners(this.client);
@@ -95,14 +99,15 @@ export class Tolinku {
     this.messages.dismiss();
   }
 
-  /** Flush any queued analytics events immediately */
+  /** Flush any queued analytics and ecommerce events immediately */
   async flush(): Promise<void> {
-    return this.analytics.flush();
+    await Promise.all([this.analytics.flush(), this.ecommerce.flush()]);
   }
 
   /** Clean up all DOM elements, flush events, and cancel in-flight requests (e.g. before unmounting in SPAs) */
   destroy(): void {
     this.analytics.destroy();
+    this.ecommerce.destroy();
     this.client.abort();
     this.banners.dismiss();
     this.messages.dismiss();
@@ -114,6 +119,19 @@ export { TolinkuError } from './client.js';
 export type {
   TolinkuConfig,
   TrackProperties,
+  EcommerceItem,
+  PurchaseParams,
+  AddToCartParams,
+  RemoveFromCartParams,
+  AddToWishlistParams,
+  BeginCheckoutParams,
+  RefundParams,
+  ViewItemParams,
+  SearchParams,
+  AddPaymentInfoParams,
+  ShareParams,
+  RateParams,
+  SpendCreditsParams,
   CreateReferralOptions,
   CreateReferralResult,
   CompleteReferralOptions,

@@ -173,3 +173,90 @@ export interface ShowMessageOptions {
   onDismiss?: (messageId: string) => void;
   onButtonPress?: (action: string, messageId: string) => void;
 }
+
+// ─── Ecommerce Types ─────────────────────────────────────
+
+export interface EcommerceItem {
+  item_id: string;
+  item_name?: string;
+  item_category?: string;
+  item_brand?: string;
+  item_variant?: string;
+  item_list_name?: string;
+  item_list_id?: string;
+  item_image_url?: string;
+  price?: number;
+  quantity?: number;
+  currency?: string;
+  coupon_code?: string;
+  discount?: number;
+}
+
+export interface PurchaseParams {
+  transaction_id: string;
+  revenue: number;
+  currency: string;
+  items?: EcommerceItem[];
+  cart_id?: string;
+  coupon_code?: string;
+  discount?: number;
+  shipping?: number;
+  tax?: number;
+}
+
+export interface AddToCartParams {
+  items: EcommerceItem[];
+  cart_id?: string;
+}
+
+export interface RemoveFromCartParams {
+  items: EcommerceItem[];
+  cart_id?: string;
+}
+
+export interface AddToWishlistParams {
+  items: EcommerceItem[];
+}
+
+export interface BeginCheckoutParams {
+  revenue?: number;
+  currency?: string;
+  cart_id?: string;
+  items?: EcommerceItem[];
+}
+
+export interface RefundParams {
+  transaction_id: string;
+  revenue: number;
+  currency?: string;
+  items?: EcommerceItem[];
+}
+
+export interface ViewItemParams {
+  items: EcommerceItem[];
+}
+
+export interface SearchParams {
+  search_term: string;
+}
+
+export interface AddPaymentInfoParams {
+  cart_id?: string;
+}
+
+export interface ShareParams {
+  item_id?: string;
+  url?: string;
+  method?: string;
+}
+
+export interface RateParams {
+  item_id: string;
+  rating: number;
+  max_rating?: number;
+}
+
+export interface SpendCreditsParams {
+  revenue: number;
+  currency: string;
+}
