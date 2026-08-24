@@ -14,10 +14,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: https://registry.npmjs.org
+      # OIDC trusted publishing needs npm 11.5.1 or newer, and the npm bundled
+      # with Node is older than that.
+      - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run build
+      # No NODE_AUTH_TOKEN on purpose. This package is set to disallow tokens
+      # that bypass 2FA, so a token is rejected outright, and npm reports that
+      # as a 404 on the PUT rather than a 401. Publishing goes through the
+      # trusted publisher registered for this repo, this workflow file and the
+      # npm-publish environment, using the same OIDC identity that already signs
+      # the provenance statement. Nothing to expire and nothing to rotate.
       - run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
