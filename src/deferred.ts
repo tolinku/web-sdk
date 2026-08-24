@@ -23,8 +23,28 @@ export class Deferred {
         language: options.language || navigator.language,
         screen_width: options.screenWidth || window.screen.width,
         screen_height: options.screenHeight || window.screen.height,
+        // Separates devices reporting identical logical dimensions.
+        device_pixel_ratio: options.devicePixelRatio || window.devicePixelRatio || 1,
       });
     } catch (err) {
+      // A 404 is the ordinary "nothing waiting for this device" outcome. Any other
+      // status is a configuration problem worth naming: a 403 in particular means
+      // appspaceId is wrong, and a generic warning sends people looking elsewhere.
+      const status = (err as { statusCode?: number; status?: number })?.statusCode
+        ?? (err as { status?: number })?.status;
+      if (status === 404) {
+        // Nothing is waiting for this device. The ordinary outcome, not a fault.
+        return null;
+      }
+      if (status === 403) {
+        console.warn(
+          '[Tolinku] Failed to claim deferred link by signals: HTTP 403.',
+          'Check that appspaceId is your Appspace ID (copy it from the dashboard',
+          'under Settings), not your subdomain or slug.',
+          err,
+        );
+        return null;
+      }
       console.warn('[Tolinku] Failed to claim deferred link by signals:', err);
       return null;
     }

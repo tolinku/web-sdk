@@ -77,6 +77,8 @@ describe('Deferred', () => {
       language: 'en-US',
       screen_width: 1920,
       screen_height: 1080,
+      // Sent automatically: it separates devices reporting the same logical size.
+      device_pixel_ratio: 1,
     });
     expect(result).toEqual(link);
   });
@@ -108,5 +110,65 @@ describe('Deferred', () => {
     expect(result).toBeNull();
     expect(warnSpy).toHaveBeenCalledOnce();
     expect(warnSpy.mock.calls[0][0]).toContain('Failed to claim deferred link by signals');
+  });
+
+  // -- Distinguishing "nothing waiting" from "misconfigured" --
+
+  it('should stay silent on 404, which only means nothing was waiting', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    (client.postPublic as ReturnType<typeof vi.fn>).mockRejectedValue(
+      Object.assign(new Error('Not found'), { statusCode: 404 }),
+    );
+
+    const result = await deferred.claimBySignals({ appspaceId: 'app-1' });
+
+    expect(result).toBeNull();
+    // Most calls legitimately find nothing. Warning every time would train
+    // integrators to ignore the console, where the 403 below actually matters.
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('should name appspaceId as the likely cause on 403', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    (client.postPublic as ReturnType<typeof vi.fn>).mockRejectedValue(
+      Object.assign(new Error('Unknown appspace_id'), { statusCode: 403 }),
+    );
+
+    const result = await deferred.claimBySignals({ appspaceId: 'my-subdomain' });
+
+    expect(result).toBeNull();
+    expect(warnSpy).toHaveBeenCalledOnce();
+    const message = warnSpy.mock.calls[0].join(' ');
+    // A wrong appspaceId used to be indistinguishable from no match, which is
+    // what made it cost days to diagnose. The warning has to say so.
+    expect(message).toContain('403');
+    expect(message).toContain('appspaceId');
+    expect(message).toContain('Settings');
+  });
+
+  // -- Device pixel ratio --
+
+  it('should send devicePixelRatio automatically', async () => {
+    (client.postPublic as ReturnType<typeof vi.fn>).mockResolvedValue({
+      deep_link_path: '/x',
+      appspace_id: 'app-1',
+    });
+
+    await deferred.claimBySignals({ appspaceId: 'app-1' });
+
+    const body = (client.postPublic as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(body.device_pixel_ratio).toBe(window.devicePixelRatio || 1);
+  });
+
+  it('should let the caller override devicePixelRatio', async () => {
+    (client.postPublic as ReturnType<typeof vi.fn>).mockResolvedValue({
+      deep_link_path: '/x',
+      appspace_id: 'app-1',
+    });
+
+    await deferred.claimBySignals({ appspaceId: 'app-1', devicePixelRatio: 3 });
+
+    const body = (client.postPublic as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(body.device_pixel_ratio).toBe(3);
   });
 });

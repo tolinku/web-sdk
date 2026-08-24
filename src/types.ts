@@ -106,6 +106,8 @@ export interface ClaimBySignalsOptions {
   language?: string;
   screenWidth?: number;
   screenHeight?: number;
+  /** Defaults to `window.devicePixelRatio`. Override only if you report a custom screen size. */
+  devicePixelRatio?: number;
 }
 
 /** Banner config returned by the API */
@@ -128,14 +130,63 @@ export interface BannerItem {
   text_color: string;
   cta_text: string | null;
   position: string | null;
+  style: string | null;
+  shadow: string | null;
+  radius: number | null;
+  margin: number | null;
   dismiss_days: number | null;
   priority: number;
 }
 
-/** Options for showing a banner */
+/** Options for showing a banner. All fields are optional.
+ *  Resolution chain per value: option → server config → theme → built-in default. */
 export interface ShowBannerOptions {
+  // Behavior
   position?: 'top' | 'bottom';
+  style?: 'pinned' | 'floating' | 'stacked';
+  animation?: 'slide' | 'fade' | 'pop' | 'none';
+  theme?: 'light' | 'dark';
   label?: string;
+  delay?: number;
+  /** Stacked-mode only: CSS selector for the element to inject before (top) or after (bottom).
+   *  Falls back to auto-detect when omitted. */
+  anchor?: string;
+
+  // Banner shape
+  bg?: string;
+  border?: string;
+  radius?: number;
+  margin?: number;
+  shadow?: 'none' | 'sm' | 'md' | 'lg';
+
+  // Title
+  titleColor?: string;
+  titleSize?: number;
+  titleWeight?: 400 | 500 | 600 | 700;
+
+  // Body
+  bodyColor?: string;
+  bodySize?: number;
+  bodyWeight?: 400 | 500 | 600 | 700;
+
+  // CTA
+  ctaBg?: string;
+  ctaColor?: string;
+  ctaSize?: number;
+  ctaWeight?: 400 | 500 | 600 | 700;
+  ctaRadius?: number;
+
+  // Icon
+  iconSize?: number;
+  iconRadius?: number;
+
+  // Toggles
+  hideIcon?: boolean;
+  hideClose?: boolean;
+  hideBody?: boolean;
+
+  // Custom CSS hook
+  customClass?: string;
 }
 
 /** In-app message from the API */
