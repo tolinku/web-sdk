@@ -1,3 +1,33 @@
+## 0.4.0
+
+### Added
+
+- `claimDeferredLink()` recovers the link that led here and remembers that it
+  did. There is no Play Install Referrer on the web, so this is signal matching
+  with the bookkeeping that makes calling it safe, matching the call of the same
+  name on the Android, React Native and Flutter SDKs.
+
+  The bookkeeping is the point. A claim is consumed the first time it succeeds,
+  so an app calling `claimBySignals` on every page load asks again after the
+  answer is spent, and each of those is recorded as a miss. The match rate on
+  the dashboard then falls towards zero while the integration is working
+  correctly, which is difficult to diagnose from the outside.
+
+  Only a settled answer is remembered. A dropped request, or a 403 from the
+  wrong `appspaceId`, leaves the next run free to try again rather than spending
+  the one chance at attribution on a bad connection or a typo.
+
+- `dist/tolinku.min.js`, a browser build for the script tag the dashboard hands
+  out. Nothing in the package could previously be loaded that way: `index.js` is
+  CommonJS and fails on `exports is not defined` the moment a browser runs it.
+  The global is the class, so it is `new Tolinku({ apiKey, baseUrl })`, the same
+  call as the npm path.
+
+### Unchanged
+
+- `claimBySignals()` behaves exactly as before and is not deprecated. It asks
+  every time it is called; remembering is what `claimDeferredLink()` adds.
+
 # Changelog
 
 ## 0.3.0
