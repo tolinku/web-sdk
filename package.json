@@ -1,6 +1,6 @@
 {
   "name": "@tolinku/web-sdk",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Tolinku Web SDK for deep linking, analytics, referrals, smart banners, and in-app messages",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -16,7 +16,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node scripts/name-cdn-bundle.mjs",
     "dev": "tsup --watch",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
