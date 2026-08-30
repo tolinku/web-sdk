@@ -213,6 +213,10 @@ export class HttpClient {
   private headers(): Record<string, string> {
     return {
       'X-API-Key': this.apiKey,
+      // Browsers default to "Accept: */*", which a server content-negotiating an
+      // error page reads as "HTML is fine". Saying so explicitly keeps an error
+      // parseable instead of arriving as a rendered page.
+      'Accept': 'application/json',
     };
   }
 }
