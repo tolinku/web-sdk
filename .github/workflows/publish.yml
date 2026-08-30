@@ -21,6 +21,10 @@ jobs:
       - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run build
+      # Publishing is the one step that cannot be undone within 72 hours,
+      # so the tests run here too rather than only on the commit that
+      # happened to be pushed to main.
+      - run: npm test
       # No NODE_AUTH_TOKEN on purpose. This package is set to disallow tokens
       # that bypass 2FA, so a token is rejected outright, and npm reports that
       # as a 404 on the PUT rather than a 401. Publishing goes through the
