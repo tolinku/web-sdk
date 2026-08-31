@@ -1,3 +1,13 @@
+/**
+ * SDK version, sent on every request so the version in the field is knowable.
+ *
+ * A browser cannot set User-Agent, which is how the other Tolinku SDKs identify
+ * themselves, so this rides in a custom header instead.
+ *
+ * Keep in step with package.json. `tests/version.test.ts` fails if it drifts.
+ */
+export const SDK_VERSION = '0.4.1';
+
 /** Configuration options for the Tolinku SDK */
 export interface TolinkuConfig {
   /** Your Tolinku publishable API key (starts with tolk_pub_) */

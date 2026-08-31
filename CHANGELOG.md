@@ -1,3 +1,14 @@
+## 0.4.1
+
+### Added
+
+- Every request now carries `X-Tolinku-SDK: web/<version>`, so the SDK version in
+  the field is knowable. The other Tolinku SDKs say this in `User-Agent`, which a
+  browser will not let a script set, so this SDK sent no version at all and a
+  web integration could not be identified or a version-specific bug traced to a
+  version. `SDK_VERSION` is exported, and a test fails if it drifts from
+  package.json.
+
 ## 0.4.0
 
 ### Added

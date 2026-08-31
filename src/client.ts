@@ -1,4 +1,5 @@
 import type { TolinkuConfig } from './types.js';
+import { SDK_VERSION } from './types.js';
 
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 500;
@@ -213,6 +214,11 @@ export class HttpClient {
   private headers(): Record<string, string> {
     return {
       'X-API-Key': this.apiKey,
+      // Which SDK and version made the call. The other Tolinku SDKs say this in
+      // User-Agent, which a browser will not let a script set, so it goes in a
+      // header of our own. Without it a web integration is unidentifiable in the
+      // field and a version-specific bug cannot be traced to a version.
+      'X-Tolinku-SDK': `web/${SDK_VERSION}`,
       // Browsers default to "Accept: */*", which a server content-negotiating an
       // error page reads as "HTML is fine". Saying so explicitly keeps an error
       // parseable instead of arriving as a rendered page.
