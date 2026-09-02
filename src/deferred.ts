@@ -96,12 +96,12 @@ export class Deferred {
     try {
       const link = await this.client.postPublic<DeferredLink>('/v1/api/deferred/claim-by-signals', {
         appspace_id: options.appspaceId,
-        timezone: options.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-        language: options.language || navigator.language,
-        screen_width: options.screenWidth || window.screen.width,
-        screen_height: options.screenHeight || window.screen.height,
+        timezone: override(options.timezone) || Intl.DateTimeFormat().resolvedOptions().timeZone,
+        language: override(options.language) || navigator.language,
+        screen_width: override(options.screenWidth) || window.screen.width,
+        screen_height: override(options.screenHeight) || window.screen.height,
         // Separates devices reporting identical logical dimensions.
-        device_pixel_ratio: options.devicePixelRatio || window.devicePixelRatio || 1,
+        device_pixel_ratio: override(options.devicePixelRatio) || window.devicePixelRatio || 1,
       });
       return { link, settled: true };
     } catch (err) {
@@ -130,4 +130,27 @@ export class Deferred {
       return { link: null, settled: false };
     }
   }
+}
+
+/**
+ * An override the caller actually supplied.
+ *
+ * A blank string and a non-positive number are what an unset configuration value
+ * and a failed lookup look like. Taking one literally would replace a good value
+ * the device reported with one the matcher cannot use, and a signal that is
+ * present and disagrees counts against the match where an absent one is simply
+ * skipped. So a blank override is worse than no override, which is the opposite
+ * of what the caller intends by passing it.
+ */
+function override(value: string | undefined): string | undefined;
+function override(value: number | undefined): number | undefined;
+function override(value: string | number | undefined): string | number | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed === '' ? undefined : trimmed;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value > 0 ? value : undefined;
+  }
+  return undefined;
 }
