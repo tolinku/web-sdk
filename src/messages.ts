@@ -1,4 +1,5 @@
 import type { HttpClient } from './client.js';
+import { isSafeUrl } from './url-safety.js';
 import type { Message, MessageComponent, ShowMessageOptions } from './types.js';
 import { isMessageDismissed, saveMessageDismissal, isMessageSuppressed, recordMessageImpression } from './storage.js';
 import { sanitizeCssColor } from './sanitize.js';
@@ -242,15 +243,6 @@ export class Messages {
   }
 }
 
-/** Only allow http: and https: protocols to prevent javascript: XSS */
-function isSafeUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url, window.location.href);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
 
 /** Sanitize a URL for use in CSS url() values (escape quotes and backslashes, block dangerous schemes) */
 function sanitizeCssUrl(url: string): string | null {

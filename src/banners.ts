@@ -1,4 +1,5 @@
 import type { HttpClient } from './client.js';
+import { isSafeUrl } from './url-safety.js';
 import type { BannerConfig, BannerItem, ShowBannerOptions } from './types.js';
 import { isBannerDismissed, saveBannerDismissal } from './storage.js';
 import { sanitizeCssColor } from './sanitize.js';
@@ -51,14 +52,6 @@ function sanitizeClass(val: string | undefined): string {
   return val.replace(/[^a-zA-Z0-9_\-\s]/g, '').slice(0, 100).trim();
 }
 
-function isSafeUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url, window.location.href);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
 
 export class Banners {
   private container: HTMLDivElement | null = null;
