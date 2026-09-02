@@ -36,6 +36,18 @@ export class Analytics {
   private appOpensDisabled = false;
 
   /**
+   * The last link reported, and when. Cold start and the link stream can both
+   * deliver the same tap, depending on the plugin, so an app instrumenting both
+   * paths would otherwise report it twice and be billed twice. A genuine second
+   * tap of the same link inside this window is implausible; a duplicate delivery
+   * of one tap is not.
+   */
+  private lastOpenUrl: string | null = null;
+  private lastOpenAt = 0;
+  private static readonly OPEN_DEDUPE_MS = 5000;
+
+
+  /**
    * Report that a link opened the app without the browser being involved.
    *
    * A Universal Link or App Link hands the app the URL directly, so Tolinku is
@@ -64,6 +76,11 @@ export class Analytics {
       return;
     }
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
+
+    const now = Date.now();
+    if (this.lastOpenUrl === trimmed && now - this.lastOpenAt < Analytics.OPEN_DEDUPE_MS) return;
+    this.lastOpenUrl = trimmed;
+    this.lastOpenAt = now;
 
     try {
       const result = await this.client.postPublic<{ attribute?: boolean }>(

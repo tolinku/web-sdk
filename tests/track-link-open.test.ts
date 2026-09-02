@@ -106,4 +106,22 @@ describe('trackLinkOpen', () => {
       analytics().trackLinkOpen('https://links.example.com/a'),
     ).resolves.toBeUndefined();
   });
+
+  it('reports one tap once, however it was delivered', async () => {
+    // Cold start and the link stream can both hand over the same tap, so an app
+    // instrumenting both paths would otherwise be billed twice for it.
+    const a = analytics();
+    await a.trackLinkOpen('https://links.example.com/promo');
+    await a.trackLinkOpen('https://links.example.com/promo');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('still reports a different link straight after', async () => {
+    const a = analytics();
+    await a.trackLinkOpen('https://links.example.com/a');
+    await a.trackLinkOpen('https://links.example.com/b');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
