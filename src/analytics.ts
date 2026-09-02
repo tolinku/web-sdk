@@ -29,6 +29,53 @@ export class Analytics {
    *
    * Events are queued and sent in batches for efficiency.
    */
+  /**
+   * Set once the server says this Appspace does not attribute app opens, so the
+   * setting costs one request a launch rather than one per link.
+   */
+  private appOpensDisabled = false;
+
+  /**
+   * Report that a link opened the app without the browser being involved.
+   *
+   * A Universal Link or App Link hands the app the URL directly, so Tolinku is
+   * never contacted and the tap goes unrecorded. Those taps come from people who
+   * already have the app, so leaving them out makes a re-engagement campaign
+   * look like a failure exactly when it worked.
+   *
+   * Only http and https links are reported. A custom scheme means Tolinku's own
+   * hand-off page opened the app, and that tap was counted when the page was
+   * served, so passing one does nothing rather than counting it twice.
+   *
+   * Never throws. This runs on the path that routes the user somewhere, and a
+   * tap that goes unrecorded is not worth interrupting that.
+   */
+  async trackLinkOpen(url: string, userId?: string): Promise<void> {
+    if (this.appOpensDisabled) return;
+
+    const trimmed = typeof url === 'string' ? url.trim() : '';
+    if (!trimmed) return;
+
+    // The scheme decides, and the server checks it again.
+    let parsed: URL;
+    try {
+      parsed = new URL(trimmed);
+    } catch {
+      return;
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
+
+    try {
+      const result = await this.client.postPublic<{ attribute?: boolean }>(
+        '/v1/api/opens',
+        { url: trimmed, ...(userId ? { user_id: userId } : {}) },
+      );
+      if (result?.attribute === false) this.appOpensDisabled = true;
+    } catch {
+      // Deliberately silent.
+    }
+  }
+
   async track(eventType: string, properties?: TrackProperties): Promise<void> {
     if (typeof eventType !== 'string' || eventType.trim().length === 0) {
       throw new Error('Tolinku: event name must be a non-empty string');
