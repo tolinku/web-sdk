@@ -79,24 +79,6 @@ export class Tolinku {
     return this.analytics.track(eventType, mergedProps);
   }
 
-  /**
-   * Report that a link opened the app, when it opened without the browser.
-   *
-   * A Universal Link or App Link hands the app the URL directly, so Tolinku is
-   * never contacted and the tap goes unrecorded. Those taps come from people who
-   * already have your app, so leaving them out makes a re-engagement campaign
-   * look like a failure exactly when it worked.
-   *
-   * Call it wherever the app receives an incoming link, passing the URL
-   * unchanged. Only http and https links are reported: a custom scheme means
-   * Tolinku's own hand-off page opened the app and that tap is already counted.
-   *
-   * Never throws.
-   */
-  async trackLinkOpen(url: string): Promise<void> {
-    return this.analytics.trackLinkOpen(url, this._userId ?? undefined);
-  }
-
   /** Show a smart banner at the top or bottom of the page */
   async showBanner(options?: ShowBannerOptions): Promise<void> {
     return this.banners.show(options, this._userId);
