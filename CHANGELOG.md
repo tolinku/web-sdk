@@ -1,3 +1,11 @@
+## 0.5.0
+
+### Changed
+
+- Version bumped alongside the other SDKs. This one gains no `trackLinkOpen`:
+  a browser visiting a Tolinku link always reaches the server, so the tap is
+  already recorded and reporting it would count one visit twice.
+
 ## 0.4.1
 
 ### Added
