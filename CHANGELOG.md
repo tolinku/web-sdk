@@ -1,3 +1,40 @@
+# Changelog
+
+## 0.6.0
+
+### Added
+
+- `tolinku.links.resolve(url)` turns a link into the route and token it means.
+
+  On the open web this rarely comes up: a browser follows a short link to
+  Tolinku, which resolves it and serves the page, so nothing on the page ever
+  sees an unreadable URL.
+
+  Inside a Capacitor or Cordova app it comes up constantly. There the operating
+  system hands the web layer the URL that was tapped, exactly as written, and
+  the routing happens in JavaScript. A short link arrives as an opaque code,
+  `/s7k2p9q/4821`, and nothing in it says which route it is. Code parsing the
+  path itself sees a first segment it has never heard of and does nothing, so
+  the link opens the app and then appears to fail: no error, no screen, no clue.
+
+  ```js
+  const link = await tolinku.links.resolve(url);
+  if (link) route(link.deep_link_path); // "/order/4821/receipt"
+  ```
+
+  A readable URL comes back unchanged, so everything can be resolved rather than
+  guessing which kind it is. The question goes to the link's own host, which is
+  how Tolinku knows the Appspace, so a link on someone else's domain answers
+  nothing, and no API key goes with it. Never throws.
+
+  Needs a platform new enough to answer for a whole path on `/v1/api/path`.
+
+### Fixed
+
+- Referral links shared in short form could open a Capacitor or Cordova app
+  without the referral code reaching it. Resolve incoming links with
+  `links.resolve` and the code arrives with the rest of the link.
+
 ## 0.5.0
 
 ### Changed
@@ -46,8 +83,6 @@
 
 - `claimBySignals()` behaves exactly as before and is not deprecated. It asks
   every time it is called; remembering is what `claimDeferredLink()` adds.
-
-# Changelog
 
 ## 0.3.0
 

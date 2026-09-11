@@ -160,6 +160,29 @@ tolinku.dismissBanner();
 
 Banners include an app icon, title, body text, and a call-to-action button. Dismissal state is tracked so banners do not reappear until the configured duration has passed.
 
+### Resolving a Link
+
+Short links arrive as an opaque code, `/s7k2p9q/4821`. On the open web you will
+rarely see one, since the browser follows it to Tolinku first. Inside a
+Capacitor or Cordova app you will see it every time: the operating system hands
+the web layer the URL that was tapped, and code parsing the path itself has no
+idea what the code stands for, so the link opens the app and nothing happens.
+
+`resolve` asks Tolinku, which answers with the route, the token and the
+canonical path. A readable URL comes back unchanged, so you can resolve
+everything rather than guessing which kind you have. It never throws: a link it
+cannot resolve is one to fall back to your own handling for.
+
+```js
+const link = await tolinku.links.resolve(url);
+if (link) {
+  // link.deep_link_path -> "/order/4821/receipt"
+  // link.token          -> "4821"
+  // link.route.prefix   -> "order/{token}/receipt"
+  route(link.deep_link_path);
+}
+```
+
 ## Configuration Options
 
 ```typescript

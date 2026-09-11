@@ -3,6 +3,7 @@ import { Analytics } from './analytics.js';
 import { Ecommerce } from './ecommerce.js';
 import { Referrals } from './referrals.js';
 import { Deferred } from './deferred.js';
+import { Links } from './links.js';
 import { Banners } from './banners.js';
 import { Messages } from './messages.js';
 import type {
@@ -23,6 +24,14 @@ export class Tolinku {
   readonly referrals: Referrals;
   /** Deferred deep links: claim by token or signals */
   readonly deferred: Deferred;
+
+  /**
+   * Turning a link into the route and token it means.
+   *
+   * Needed for short links, which arrive as an opaque code. See
+   * {@link Links.resolve}.
+   */
+  readonly links: Links;
 
   private banners: Banners;
   private messages: Messages;
@@ -55,6 +64,7 @@ export class Tolinku {
     this.ecommerce = new Ecommerce(this.client, () => this._userId);
     this.referrals = new Referrals(this.client);
     this.deferred = new Deferred(this.client);
+    this.links = new Links(this.client);
     this.banners = new Banners(this.client);
     this.messages = new Messages(this.client);
   }
@@ -141,6 +151,7 @@ export type {
   ReferralInfo,
   LeaderboardEntry,
   DeferredLink,
+  ResolvedLink,
   ClaimBySignalsOptions,
   BannerConfig,
   BannerItem,

@@ -81,6 +81,31 @@ export class HttpClient {
     return this.parseJson<T>(res);
   }
 
+  /**
+   * POST to a host other than the configured one, without the API key.
+   *
+   * A few public endpoints work out which Appspace they belong to from the
+   * hostname the request arrives on rather than from a key or an id, so a
+   * question about a link on a customer's own domain has to be asked on that
+   * domain. No key goes with it: the origin comes from a URL the caller was
+   * handed, which is not necessarily ours.
+   */
+  async postPublicToOrigin<T>(origin: string, path: string, body?: Record<string, unknown>): Promise<T> {
+    const res = await this.fetchWithRetry(origin.replace(/\/+$/, '') + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: this.signal,
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({ error: res.statusText }));
+      throw new TolinkuError(data.error || res.statusText, res.status, data.code);
+    }
+
+    return this.parseJson<T>(res);
+  }
+
   /** GET without API key auth (for public endpoints like banner config) */
   async getPublic<T>(path: string, params?: Record<string, string>): Promise<T> {
     let url = this._baseUrl + path;

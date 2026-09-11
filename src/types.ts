@@ -6,7 +6,7 @@
  *
  * Keep in step with package.json. `tests/version.test.ts` fails if it drifts.
  */
-export const SDK_VERSION = '0.5.0';
+export const SDK_VERSION = '0.6.0';
 
 /** Configuration options for the Tolinku SDK */
 export interface TolinkuConfig {
@@ -320,4 +320,25 @@ export interface RateParams {
 export interface SpendCreditsParams {
   revenue: number;
   currency: string;
+}
+
+/**
+ * What a Tolinku link turned out to mean.
+ *
+ * The same shape in every SDK, so an app moving between them reads one thing.
+ * The Appspace the link belongs to is deliberately not here: the caller already
+ * knows which Appspace it is, and nothing about routing a link needs it.
+ */
+export interface ResolvedLink {
+  /** The route that answers this link. */
+  route: {
+    prefix: string;
+    name: string;
+    template: string;
+    link_type?: string;
+  };
+  /** The token the link carried, or '' where it carried none. */
+  token: string;
+  /** The canonical path, with the token wherever the route's prefix puts it. */
+  deep_link_path: string;
 }
