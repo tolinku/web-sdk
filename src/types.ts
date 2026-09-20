@@ -6,7 +6,7 @@
  *
  * Keep in step with package.json. `tests/version.test.ts` fails if it drifts.
  */
-export const SDK_VERSION = '0.6.0';
+export const SDK_VERSION = '0.7.0';
 
 /** Configuration options for the Tolinku SDK */
 export interface TolinkuConfig {
@@ -217,14 +217,39 @@ export interface Message {
 
 /** Puck component content tree */
 export interface MessageContent {
-  root: { props: Record<string, unknown> };
+  root?: { props?: Record<string, unknown> };
   content: MessageComponent[];
+  /**
+   * Where a Section's children actually live.
+   *
+   * Puck stores the contents of a drop zone here, keyed `<component id>:content`,
+   * and never writes `props.children`. A renderer that reads `props.children`
+   * draws every Section as an empty box and loses everything inside it.
+   */
+  zones?: Record<string, MessageComponent[]>;
 }
 
 /** A single Puck component */
 export interface MessageComponent {
   type: string;
   props: Record<string, unknown>;
+}
+
+/**
+ * The app a message belongs to, sent alongside the messages.
+ *
+ * AppIcon, StoreButtons and DeepLinkButton describe the app rather than the
+ * message, so the content itself carries nothing to draw them from.
+ */
+export interface MessageAppContext {
+  name: string;
+  icon_url: string | null;
+  ios_store_url: string | null;
+  android_store_url: string | null;
+  deep_link_url: string | null;
+  /** The store badge artwork, absolute and PNG, served by the API host. */
+  ios_badge_url?: string | null;
+  android_badge_url?: string | null;
 }
 
 /** Options for showing an in-app message */

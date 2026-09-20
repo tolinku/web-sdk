@@ -159,5 +159,6 @@ export type {
   Message,
   MessageContent,
   MessageComponent,
+  MessageAppContext,
   ShowMessageOptions,
 } from './types.js';
