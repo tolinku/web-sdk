@@ -118,7 +118,7 @@ export class Messages {
     if (root.bgGradient) {
       // background-image rather than the background shorthand, so the colour
       // above still shows through a gradient that is not fully opaque.
-      const gradient = cssVal(String(root.bgGradient));
+      const gradient = safeGradient(String(root.bgGradient));
       if (gradient) card.style.backgroundImage = gradient;
     }
     if (root.bgImage) {
@@ -130,8 +130,13 @@ export class Messages {
         card.style.backgroundRepeat = 'no-repeat';
       }
     }
-    card.style.padding = clamp(authoredNumber(root.padding, 24), 0, 200) + 'px';
-    card.style.maxWidth = clamp(authoredNumber(root.contentWidth, 375), 100, 2000) + 'px';
+    // The defaults are the builder's own defaultProps, which the server
+    // renderer already matches. A different number here drew every message that
+    // never touched these fields at a width the author never saw.
+    card.style.padding = clamp(authoredNumber(root.padding, 20), 0, 200) + 'px';
+    // The minimum is what keeps an authored 0 from becoming a sliver of a card
+    // with a close button in it.
+    card.style.maxWidth = clamp(authoredNumber(root.contentWidth, 480), 100, 2000) + 'px';
     overlay.style.alignItems = root.verticalAlign === 'top' ? 'flex-start' : 'center';
 
     // Close button
@@ -153,16 +158,21 @@ export class Messages {
       zones: message.content?.zones,
       app: this.app,
     };
-    let drew = false;
-    if (message.content && message.content.content) {
-      for (const component of message.content.content) {
-        const el = this.renderComponent(component, context);
-        if (el) {
-          card.appendChild(el);
-          drew = true;
-        }
-      }
+    // Whatever the API sent, not whatever it was supposed to send. This is a
+    // network response: content that is not an array threw out of show() before
+    // the overlay was ever appended, so the message did not fall back to its
+    // title and body, it simply never appeared.
+    const content = Array.isArray(message.content?.content) ? message.content!.content : [];
+    for (const component of content) {
+      const el = this.renderComponent(component, context);
+      if (el) card.appendChild(el);
     }
+
+    // Asked of the content rather than of what was appended, because a few
+    // components draw an element that holds nothing: an empty Section is a box,
+    // and counting it as content left a message showing a blank card instead of
+    // the title and body it still has.
+    const drew = drawsAnything(content, context, 0);
 
     // A message with no usable content still has a title and a body, which are
     // fields of the message rather than of the Puck tree. Drawing those beats
@@ -203,7 +213,10 @@ export class Messages {
     });
   }
 
-  private renderComponent(component: MessageComponent, context: RenderContext): HTMLElement | null {
+  private renderComponent(component: MessageComponent, context: RenderContext, depth = 0): HTMLElement | null {
+    // A null entry in the content array is a thing the API can send, and
+    // reading .type off it took the whole message down with a TypeError.
+    if (!component || typeof component !== 'object') return null;
     const props = component.props || {};
 
     switch (component.type) {
@@ -279,9 +292,8 @@ export class Messages {
         // Children come from the zone Puck wrote them to, keyed by this
         // component's id. props.children is never written by Puck, so reading
         // it drew every Section as an empty box and lost its whole contents.
-        const children = context.zones?.[`${props.id as string}:content`] || [];
-        for (const child of children) {
-          const childEl = this.renderComponent(child, context);
+        for (const child of sectionChildren(props, context, depth)) {
+          const childEl = this.renderComponent(child, context, depth + 1);
           if (childEl) el.appendChild(childEl);
         }
         return el;
@@ -349,10 +361,12 @@ export class Messages {
         // absolute and already PNG. Building the URL here instead would be this
         // SDK guessing at a path on a host it does not own.
         if (showIos) {
-          row.appendChild(storeBadge(iosUrl, context.app?.ios_badge_url, 'Download on the App Store', height));
+          row.appendChild(storeBadge(iosUrl, context.app?.ios_badge_url, 'Download on the App Store', height, context));
         }
         if (showAndroid) {
-          row.appendChild(storeBadge(androidUrl, context.app?.android_badge_url, 'Get it on Google Play', height));
+          row.appendChild(
+            storeBadge(androidUrl, context.app?.android_badge_url, 'Get it on Google Play', height, context),
+          );
         }
         return row;
       }
@@ -388,9 +402,14 @@ export class Messages {
     // never sets it, so the label stayed white: white on light, unreadable.
     const variant = (props.style as string) || 'filled';
     const isOutline = variant === 'outline';
-    const isSoft = variant === 'soft';
     const baseColor = sanitizeCssColor(props.bgColor as string) || '#1B1B1B';
-    el.style.backgroundColor = isOutline ? 'transparent' : isSoft ? softVariant(baseColor) : baseColor;
+    // A tint can only be made of a hex colour. Where it cannot ("blue", an
+    // rgb() call, an 8-digit hex), the button falls back to the filled variant
+    // rather than painting the label in the same colour as the block behind it,
+    // which is a button with no visible label at all.
+    const tint = variant === 'soft' ? softVariant(baseColor) : null;
+    const isSoft = tint !== null;
+    el.style.backgroundColor = isOutline ? 'transparent' : isSoft ? tint : baseColor;
     el.style.color = isOutline || isSoft ? baseColor : (sanitizeCssColor(props.textColor as string) || '#ffffff');
     el.style.border = isOutline ? `2px solid ${baseColor}` : 'none';
     el.style.fontSize = authoredNumber(props.fontSize, 16) + 'px';
@@ -438,16 +457,108 @@ export class Messages {
 }
 
 /**
+ * How deep a section may nest before the renderer stops following zones.
+ *
+ * A zone can name a section that contains itself, directly or through another,
+ * and following that forever overflows the stack: the RangeError came out of
+ * show(), so nothing was drawn at all rather than something drawn wrong.
+ * Content saved before there was any validation can be shaped this way, so the
+ * renderer refuses to recurse forever rather than trusting what it is handed.
+ * The same cap as MAX_SECTION_DEPTH in the platform renderer.
+ */
+const MAX_SECTION_DEPTH = 20;
+
+/** The component types this renderer draws. */
+const SUPPORTED = new Set([
+  'Heading',
+  'TextBlock',
+  'Image',
+  'Button',
+  'Section',
+  'Spacer',
+  'Divider',
+  'AppIcon',
+  'StoreButtons',
+  'DeepLinkButton',
+]);
+
+/** The children of one Section, as far down as the renderer will follow. */
+function sectionChildren(
+  props: Record<string, unknown>,
+  context: RenderContext,
+  depth: number,
+): MessageComponent[] {
+  // An id-less section would read the literal key "undefined:content" and share
+  // its children with every other id-less section in the message.
+  const sectionId = typeof props.id === 'string' && props.id ? props.id : null;
+  if (!sectionId || depth >= MAX_SECTION_DEPTH) return [];
+  const children = context.zones?.[`${sectionId}:content`];
+  // The zones object arrives over the network like everything else, so a value
+  // that is not an array is a thing that can happen rather than a thing that
+  // cannot.
+  return Array.isArray(children) ? children : [];
+}
+
+/**
+ * Whether any of this content would actually draw something.
+ *
+ * A message can be made entirely of components this renderer skips, or of an
+ * empty Section, which is an element holding nothing. Counting those as content
+ * left the end user looking at a blank card with a close button in it, when the
+ * message still had a title and a body to show.
+ */
+function drawsAnything(content: MessageComponent[], context: RenderContext, depth: number): boolean {
+  return content.some((component) => {
+    if (!component || typeof component !== 'object' || !SUPPORTED.has(component.type)) return false;
+    const props = component.props || {};
+    // Three of these draw only when something outside the content exists, and
+    // a Section draws only what is in its zone.
+    switch (component.type) {
+      case 'Image':
+        return isSafeUrl((props.url as string) || '');
+      case 'DeepLinkButton':
+        return isNavigableUrl(context.app?.deep_link_url || '');
+      case 'StoreButtons': {
+        const ios = (props.iosUrlOverride as string) || context.app?.ios_store_url || '';
+        const android = (props.androidUrlOverride as string) || context.app?.android_store_url || '';
+        return (
+          (props.showIos !== false && isNavigableUrl(ios)) ||
+          (props.showAndroid !== false && isNavigableUrl(android))
+        );
+      }
+      case 'Section':
+        return drawsAnything(sectionChildren(props, context, depth), context, depth + 1);
+      default:
+        return true;
+    }
+  });
+}
+
+/**
  * One store badge, linked to the store it belongs to.
  *
  * With no artwork to draw, the link is still drawn, as its own label. A store
  * the author asked for and a URL to reach it are both there, so falling silent
  * over a missing picture would lose the whole button.
  */
-function storeBadge(url: string, badgeUrl: string | null | undefined, label: string, height: number): HTMLAnchorElement {
+function storeBadge(
+  url: string,
+  badgeUrl: string | null | undefined,
+  label: string,
+  height: number,
+  context: RenderContext,
+): HTMLAnchorElement {
   const link = document.createElement('a');
   link.href = url;
   link.style.display = 'inline-block';
+  // The same route a Button takes. An integrator who handles onButtonPress does
+  // so to open a URL their own way, and a bare href went around them: inside a
+  // WebView it replaced the app's own page with the store.
+  link.addEventListener('click', (event) => {
+    if (!context.options.onButtonPress) return;
+    event.preventDefault();
+    context.options.onButtonPress(url, context.messageId);
+  });
   if (isSafeUrl(badgeUrl)) {
     const img = document.createElement('img');
     img.src = badgeUrl as string;
@@ -474,12 +585,14 @@ function storeBadge(url: string, badgeUrl: string | null | undefined, label: str
  * drawn with the 8px default instead.
  */
 function authoredNumber(value: unknown, fallback: number): number {
-  if (typeof value === 'number' && isFinite(value)) return value;
-  if (typeof value === 'string' && value.trim() !== '') {
-    const parsed = Number(value);
-    if (isFinite(parsed)) return parsed;
-  }
-  return fallback;
+  // parseFloat, not Number, so this reads what the platform's cssNumber reads:
+  // "12abc" is 12 and "0x20" is 0, rather than NaN and 32.
+  const parsed = typeof value === 'number' ? value : parseFloat(String(value ?? ''));
+  if (!isFinite(parsed)) return fallback;
+  // Every number that reaches here is a size, a padding, a radius or a
+  // thickness, and none of them can be negative: the browser drops the whole
+  // declaration, so an authored -10 drew no padding rather than none of it.
+  return Math.max(0, parsed);
 }
 
 /** Keep a root dimension inside what a message surface can sensibly be. */
@@ -507,13 +620,20 @@ function dimension(raw: unknown): string | null {
   return match ? `${match[1]}px` : null;
 }
 
-/** The tint the "soft" button variant uses, matching the builder and server. */
-function softVariant(color: string): string {
+/**
+ * The tint the "soft" button variant uses, or null where there is none.
+ *
+ * Only a plain hex colour can carry the alpha, and the caller needs to know
+ * when it could not: the label of a soft button is the base colour, so handing
+ * back the base colour as the background too paints the label in the colour of
+ * the block behind it. The caller draws a filled button instead.
+ */
+function softVariant(color: string): string | null {
   if (/^#[0-9a-f]{6}$/i.test(color)) return color + '22';
   if (/^#[0-9a-f]{3}$/i.test(color)) {
     return '#' + color[1] + color[1] + color[2] + color[2] + color[3] + color[3] + '22';
   }
-  return color;
+  return null;
 }
 
 /**
@@ -527,6 +647,23 @@ function cssVal(value: string): string {
   const cleaned = String(value).replace(/[;{}<>"'`\\]/g, '');
   if (/javascript:|expression\s*\(/i.test(cleaned)) return '';
   return cleaned;
+}
+
+/** The gradient functions CSS has, and the only things bgGradient may name. */
+const GRADIENT_FUNCTION = /^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i;
+
+/**
+ * An authored background gradient, or nothing when it is not one.
+ *
+ * bgGradient is a free text field, and cssVal alone leaves `url(...)` in it: a
+ * background image is checked with isSafeUrl, while the same picture named here
+ * was fetched without a word. That fetch carries the viewer's IP and the
+ * customer's page as the Referer to whoever authored the message. A gradient is
+ * a gradient function, so that is all this accepts.
+ */
+export function safeGradient(value: string): string {
+  const cleaned = cssVal(value).trim();
+  return GRADIENT_FUNCTION.test(cleaned) ? cleaned : '';
 }
 
 /** The markdown links the TextBlock field promises the author. */
@@ -558,7 +695,12 @@ function appendMarkdownText(el: HTMLElement, text: string): void {
       link.textContent = linkText || '';
       link.style.color = 'inherit';
       link.style.textDecoration = 'underline';
-      if (!url.startsWith('/')) {
+      // Same site means exactly one leading slash. "//host" and "/\host" both
+      // start with one and are neither: a browser reads them as another origin,
+      // so treating them as local opened someone else's page in the customer's
+      // own tab with no noopener on it.
+      const sameSite = url.startsWith('/') && !url.startsWith('//') && !url.startsWith('/\\');
+      if (!sameSite) {
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
       }
@@ -574,7 +716,7 @@ function appendMarkdownText(el: HTMLElement, text: string): void {
 }
 
 /** Sanitize a URL for use in CSS url() values (escape quotes and backslashes, block dangerous schemes) */
-function sanitizeCssUrl(url: string): string | null {
+export function sanitizeCssUrl(url: string): string | null {
   if (!isSafeUrl(url)) return null;
   // Escape characters that could break out of a quoted CSS url()
   return url.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '').replace(/\r/g, '');

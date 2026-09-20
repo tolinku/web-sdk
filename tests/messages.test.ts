@@ -1,21 +1,27 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Messages } from '../src/messages.js';
+import { Messages, sanitizeCssUrl } from '../src/messages.js';
+import { isSafeUrl } from '../src/url-safety.js';
 import type { HttpClient } from '../src/client.js';
 import type { Message } from '../src/types.js';
 
-// Re-implement isSafeUrl and sanitizeCssUrl for direct testing (they are module-private)
-function isSafeUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url, 'https://example.com');
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
+// The helpers themselves, not a copy of them. The copy that used to live here
+// had drifted from the real rule, so these tests passed on behaviour the SDK
+// does not have.
 
-function sanitizeCssUrl(url: string): string | null {
-  if (!isSafeUrl(url)) return null;
-  return url.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '').replace(/\r/g, '');
+/** Where the renderer would have sent the page, since jsdom cannot navigate. */
+function captureNavigation(): { href: string | null } {
+  const captured: { href: string | null } = { href: null };
+  const original = window.location.href;
+  const stub = { ...window.location } as unknown as Location;
+  Object.defineProperty(stub, 'href', {
+    get: () => captured.href ?? original,
+    set: (value: string) => {
+      captured.href = value;
+    },
+    configurable: true,
+  });
+  vi.spyOn(window, 'location', 'get').mockReturnValue(stub);
+  return captured;
 }
 
 function createMockClient(): HttpClient {
@@ -90,10 +96,13 @@ describe('isSafeUrl', () => {
     expect(isSafeUrl('/some/path')).toBe(true);
   });
 
-  it('should reject invalid URLs that throw', () => {
-    // This is a tricky case; URL constructor with a base typically doesn't throw,
-    // but let's test an edge case with an empty string
-    expect(isSafeUrl('')).toBe(true); // Empty resolves to base URL
+  it('should treat an empty or absent URL as unsafe', () => {
+    // An empty string resolves to the current page, which is not a URL anyone
+    // authored. There is nothing to open, so there is nothing safe about it.
+    expect(isSafeUrl('')).toBe(false);
+    expect(isSafeUrl('   ')).toBe(false);
+    expect(isSafeUrl(null)).toBe(false);
+    expect(isSafeUrl(undefined)).toBe(false);
   });
 });
 
@@ -128,6 +137,11 @@ describe('Messages - button click handler', () => {
   let messages: Messages;
 
   beforeEach(() => {
+    // dismiss() fades the overlay out and removes it on a timer, so the card
+    // from the previous test is still in the document when the next one runs
+    // and document.querySelector finds that one instead of this one's.
+    document.body.innerHTML = '';
+    document.head.innerHTML = '';
     client = createMockClient();
     messages = new Messages(client);
     // Mock localStorage
@@ -161,13 +175,15 @@ describe('Messages - button click handler', () => {
     const message = makeMessage();
     (client.get as ReturnType<typeof vi.fn>).mockResolvedValue({ messages: [message] });
 
-    // We cannot easily test window.location.href assignment, but we can verify
-    // the button renders and the click handler does not throw
+    const navigation = captureNavigation();
     await messages.show();
 
     const button = document.querySelector('.tolk-msg-card button:not(.tolk-msg-close)') as HTMLButtonElement;
     expect(button).not.toBeNull();
     expect(button?.textContent).toBe('Visit Site');
+    button?.click();
+
+    expect(navigation.href).toBe('https://example.com');
   });
 
   it('should NOT navigate for javascript: URLs in button actions', async () => {
@@ -190,19 +206,16 @@ describe('Messages - button click handler', () => {
 
     (client.get as ReturnType<typeof vi.fn>).mockResolvedValue({ messages: [message] });
 
-    // Spy on window.location to verify it is NOT set
-    const locationSpy = vi.spyOn(window, 'location', 'get').mockReturnValue({
-      ...window.location,
-      href: 'https://example.com',
-    });
-
+    const navigation = captureNavigation();
     await messages.show();
 
     const button = document.querySelector('.tolk-msg-card button:not(.tolk-msg-close)') as HTMLButtonElement;
     expect(button).not.toBeNull();
-    // Clicking the button should not throw or navigate
     button?.click();
 
-    locationSpy.mockRestore();
+    // The assertion the old version of this test left out: it installed a
+    // location spy and then asserted nothing about it, so a button that did
+    // navigate to javascript: would have passed.
+    expect(navigation.href).toBeNull();
   });
 });
