@@ -35,6 +35,15 @@ export function isSafeUrl(url: string | null | undefined): boolean {
  * Named one by one, the same set as `platform/src/helpers/safe-url.ts`, because
  * a list of what to allow cannot be written here.
  */
+/**
+ * The schemes that can run code or forge an origin in a browser.
+ *
+ * Shorter than the native SDKs' list on purpose. Theirs also names `content:`,
+ * `jar:` and `filesystem:`, because an action there ends up at an Android
+ * Intent, where those read a ContentProvider or carry a second URL inside
+ * them. A browser has no such thing, so naming them here would only suggest
+ * this list and theirs disagree by accident.
+ */
 const EXECUTABLE_SCHEMES = new Set(['javascript:', 'vbscript:', 'data:', 'blob:', 'file:']);
 
 /**
