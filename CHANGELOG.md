@@ -39,6 +39,17 @@ have end users receive as nothing at all or as something else.
   rendered when there is no designed content.
 - Spacing matches the other renderers, so a message is the height it was
   designed to be.
+- A section whose zone names itself recursed until the stack gave out, and that
+  throw escapes `show()`, so nothing was drawn at all. Nesting is capped, and
+  content that is not the shape it should be falls back rather than throwing.
+- A soft button whose colour could not be tinted drew its label in the colour of
+  its own background. It falls back to filled, which is readable.
+- A protocol-relative markdown link was treated as local, so it replaced the
+  page with another origin and carried no `rel="noopener noreferrer"`.
+- Store badges navigated past `onButtonPress`, which replaced an integrator's
+  own WebView. A gradient could carry a `url()` and fire a request from the
+  viewer's browser. A negative number produced no CSS at all rather than a
+  visible fallback.
 
 ### Added
 
