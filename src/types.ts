@@ -6,7 +6,7 @@
  *
  * Keep in step with package.json. `tests/version.test.ts` fails if it drifts.
  */
-export const SDK_VERSION = '0.7.0';
+export const SDK_VERSION = '0.6.1';
 
 /** Configuration options for the Tolinku SDK */
 export interface TolinkuConfig {
