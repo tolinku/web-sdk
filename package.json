@@ -1,6 +1,6 @@
 {
   "name": "@tolinku/web-sdk",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "Tolinku Web SDK for deep linking, analytics, referrals, smart banners, and in-app messages",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -47,10 +47,10 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
-    "jsdom": "^28.1.0",
-    "tsup": "^8.0.0",
-    "typescript": "^5.4.0",
-    "vitest": "^3.0.0"
+    "jsdom": "^31.0.0",
+    "tsup": "^9.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.0"
   },
   "sideEffects": false
 }

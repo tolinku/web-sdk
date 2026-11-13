@@ -32,17 +32,23 @@ export function isSafeUrl(url: string | null | undefined): boolean {
 /**
  * The schemes that can run code or forge an origin when a browser follows them.
  *
- * Named one by one, the same set as `platform/src/helpers/safe-url.ts`, because
- * a list of what to allow cannot be written here.
- */
-/**
- * The schemes that can run code or forge an origin in a browser.
+ * Named one by one, because a list of what to allow cannot be written here: the
+ * whole point of a call to action on a deep linking product is that the
+ * customer's own scheme is one we have never seen.
  *
- * Shorter than the native SDKs' list on purpose. Theirs also names `content:`,
- * `jar:` and `filesystem:`, because an action there ends up at an Android
- * Intent, where those read a ContentProvider or carry a second URL inside
- * them. A browser has no such thing, so naming them here would only suggest
- * this list and theirs disagree by accident.
+ * Deliberately the same five as `platform/src/helpers/safe-url.ts`, which
+ * applies this rule to the same URL when it renders the message server side.
+ * They are kept identical so that a URL cannot be refused in one place and
+ * followed in the other; change one and change both.
+ *
+ * Shorter than the four app SDKs' list, which also names `content:`, `jar:`
+ * and `filesystem:`. An action there can end up at an Android Intent, where
+ * `content:` reads a ContentProvider and `jar:` carries a second URL inside
+ * it, and neither scheme exists in a browser. `filesystem:` does exist in a
+ * browser, but it resolves inside the sandbox of the origin named in the URL,
+ * so it cannot reach ours, and browsers already refuse to navigate to one at
+ * the top level. It is in their list because it is reachable through an Intent,
+ * not because this list is missing it.
  */
 const EXECUTABLE_SCHEMES = new Set(['javascript:', 'vbscript:', 'data:', 'blob:', 'file:']);
 
