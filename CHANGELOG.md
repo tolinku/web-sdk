@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.7.0
+
+Maintenance only. The shipped JavaScript is byte for byte identical to 0.6.1
+and the exported type surface is unchanged, so there is nothing here you need
+to act on. It carries a version because all five SDKs moved to 0.7.0 together,
+not because anything in this package changed for callers.
+
+The generated declarations were checked against TypeScript 5.0, 5.4, 5.9 and
+6.0: they parse on all of them, so emitting them with TypeScript 6 does not
+raise the TypeScript version you need.
+
+### Changed
+
+- Dev tooling: TypeScript 5.4 to 6.0, tsup 8 to 9, vitest 3 to 5, jsdom 28 to
+  31. CI moves to Node 24, which jsdom 31 requires. All ten of the advisories
+  reported against the dev dependency tree are resolved.
+
+- TypeScript 7 was not taken. It ships no JavaScript compiler API, which is
+  what tsup uses to generate the `.d.ts` files this package publishes, and the
+  compatibility package for it does not currently work with tsup either. 6.0 is
+  the last line that can emit our types.
+
 ## 0.6.1
 
 ### Fixed
