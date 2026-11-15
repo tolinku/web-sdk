@@ -37,7 +37,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tolinku/web-sdk.git"
+    "url": "git+https://github.com/tolinku/web-sdk.git"
   },
   "homepage": "https://tolinku.com/docs",
   "bugs": {
