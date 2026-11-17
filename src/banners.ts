@@ -62,6 +62,36 @@ export class Banners {
 
   constructor(private client: HttpClient) {}
 
+  /**
+   * Tell the server a banner was tapped.
+   *
+   * sendBeacon, because the navigation that follows cancels a plain fetch. It
+   * is queued by the browser and delivered regardless, which is the only way to
+   * report something that happens as the page is being left.
+   *
+   * Never throws and never awaits: a banner that cannot report a tap must still
+   * open the link.
+   */
+  private reportClick(bannerId: string, target: string): void {
+    try {
+      const url = this.client.baseUrl + '/v1/api/banner/click';
+      const body = JSON.stringify({ banner_id: bannerId, target: target });
+      const nav = navigator as Navigator & { sendBeacon?: (u: string, d?: BodyInit) => boolean };
+      if (typeof nav.sendBeacon === 'function') {
+        nav.sendBeacon(url, new Blob([body], { type: 'application/json' }));
+      } else {
+        void fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: body,
+          keepalive: true,
+        }).catch(() => {});
+      }
+    } catch {
+      /* reporting must never break the banner */
+    }
+  }
+
   /** Fetch banner config and show the highest-priority banner */
   async show(options: ShowBannerOptions = {}, userId?: string | null): Promise<void> {
     const params: Record<string, string> = {};
@@ -342,6 +372,20 @@ export class Banners {
     cta.className = 'tolk-cta';
     cta.href = isSafeUrl(installUrl) ? installUrl : '#';
     cta.textContent = ctaText;
+    // Report the tap, without getting in front of it.
+    //
+    // The anchor keeps its real href and navigates as it always did. Routing
+    // the call to action through a counting endpoint would put a round trip in
+    // front of a tap whose whole job is to feel instant, and would break the
+    // banner entirely if that endpoint were ever down.
+    //
+    // Until this existed the tap was invisible: the destination is a Tolinku
+    // link so the traffic still landed as a click, but nothing said which
+    // banner earned it, and the "Banner Clicks" figure on the dashboard could
+    // only ever read zero.
+    cta.addEventListener('click', () => {
+      this.reportClick(banner.id, cta.href);
+    });
     inner.appendChild(cta);
 
     container.appendChild(inner);
