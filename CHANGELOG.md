@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.8.0
+
+### Added
+
+- Smart banners now report when their call to action is tapped.
+
+  The button was a plain link with no handler, so a tap navigated and the
+  server never heard about it. No traffic was lost, because the destination is
+  a Tolinku link and arrives as a click either way, but nothing recorded which
+  banner earned it and the "Banner Clicks" figure on your dashboard could only
+  ever read zero. It can now show real numbers, and installs can be traced back
+  to the banner that produced them.
+
+  The button keeps its real destination and opens exactly as before. The report
+  goes out alongside the navigation through `sendBeacon`, which the browser
+  delivers even as the page is being left. Routing the button through a
+  counting endpoint instead would have put a round trip in front of a tap whose
+  whole job is to feel instant, and would have broken the banner outright
+  whenever that endpoint was slow or down.
+
+  Reporting never throws and never blocks. A banner that cannot report a tap
+  still opens the link.
+
+- Nothing to change in your integration. This is automatic for any banner
+  rendered by this package.
+
 ## 0.7.0
 
 Maintenance only. The shipped JavaScript is byte for byte identical to 0.6.1
