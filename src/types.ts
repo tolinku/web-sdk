@@ -6,7 +6,7 @@
  *
  * Keep in step with package.json. `tests/version.test.ts` fails if it drifts.
  */
-export const SDK_VERSION = '0.8.0';
+export const SDK_VERSION = '0.8.1';
 
 /** Configuration options for the Tolinku SDK */
 export interface TolinkuConfig {
@@ -105,6 +105,19 @@ export interface LeaderboardEntry {
 export interface DeferredLink {
   deep_link_path: string;
   appspace_id: string;
+  /**
+   * The absolute URL for this link, built from your Appspace's own host.
+   *
+   * The same field the mobile SDKs carry, so a claim reads the same whichever
+   * one an app moves between. There it is what `trackLinkOpen` has to be given,
+   * since reporting an open needs the host and a device cannot know it. On the
+   * web there is nothing to report: a page load already reached us and was
+   * counted when it was served. It is here because the server sends it and a
+   * caller should not have to cast to see it.
+   *
+   * Absent from servers older than this field, so treat it as optional.
+   */
+  url?: string;
   referrer_id?: string;
   referral_code?: string;
 }

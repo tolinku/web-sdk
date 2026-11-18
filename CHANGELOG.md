@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.8.1
+
+### Added
+
+- `DeferredLink.url`, the absolute URL for a claimed link.
+
+  The same field the four mobile SDKs gained in 0.8.1, so a claim reads the same
+  whichever SDK an app moves between. There it is what `trackLinkOpen` has to be
+  given, because reporting an open needs the host and a device cannot know it.
+  On the web there is nothing to report: a page load already reached us and was
+  counted when it was served.
+
+  It is here because the server sends it either way. Typed without it, the field
+  arrived at runtime and was invisible, so a caller who wanted the absolute URL
+  had to cast to reach a value that was already there. Optional, since older
+  servers do not send it.
+
+  No behaviour changed. Nothing in this SDK reads the field.
+
 ## 0.8.0
 
 ### Added
