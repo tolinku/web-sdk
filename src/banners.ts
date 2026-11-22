@@ -63,30 +63,31 @@ export class Banners {
   constructor(private client: HttpClient) {}
 
   /**
-   * Tell the server a banner was tapped.
+   * Tell the server what happened to a banner: shown, closed, or its call to
+   * action tapped. Shown gives the dashboard a tap rate; closed is otherwise
+   * known only to this browser's storage.
    *
-   * sendBeacon, because the navigation that follows cancels a plain fetch. It
-   * is queued by the browser and delivered regardless, which is the only way to
-   * report something that happens as the page is being left.
+   * sendBeacon, because the navigation that follows a tap cancels a plain
+   * fetch. It is queued by the browser and delivered regardless. The body is a
+   * string, so it goes as text/plain: the one content type a browser sends
+   * cross-origin without a preflight. The server reads it as JSON either way.
    *
-   * Never throws and never awaits: a banner that cannot report a tap must still
-   * open the link.
+   * Never throws and never awaits: a banner that cannot report must still work.
    */
-  private reportClick(bannerId: string, target: string): void {
+  private report(kind: 'view' | 'dismiss' | 'click', bannerId: string, extra?: Record<string, string>): void {
     try {
-      const url = this.client.baseUrl + '/v1/api/banner/click';
-      const body = JSON.stringify({ banner_id: bannerId, target: target });
+      const url = this.client.baseUrl + '/v1/api/banner/' + kind;
+      // Origin and path only: a query string can carry tokens.
+      const page = typeof location !== 'undefined' ? location.origin + location.pathname : '';
+      const body = JSON.stringify({ banner_id: bannerId, page, ...(extra || {}) });
       const nav = navigator as Navigator & { sendBeacon?: (u: string, d?: BodyInit) => boolean };
-      if (typeof nav.sendBeacon === 'function') {
-        nav.sendBeacon(url, new Blob([body], { type: 'application/json' }));
-      } else {
-        void fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: body,
-          keepalive: true,
-        }).catch(() => {});
-      }
+      if (typeof nav.sendBeacon === 'function' && nav.sendBeacon(url, body)) return;
+      void fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body,
+        keepalive: true,
+      }).catch(() => {});
     } catch {
       /* reporting must never break the banner */
     }
@@ -341,6 +342,7 @@ export class Banners {
       closeBtn.textContent = '×';
       closeBtn.addEventListener('click', () => {
         saveBannerDismissal(banner.id);
+        this.report('dismiss', banner.id);
         this.dismiss();
       });
       inner.appendChild(closeBtn);
@@ -384,7 +386,7 @@ export class Banners {
     // banner earned it, and the "Banner Clicks" figure on the dashboard could
     // only ever read zero.
     cta.addEventListener('click', () => {
-      this.reportClick(banner.id, cta.href);
+      this.report('click', banner.id, { target: cta.href });
     });
     inner.appendChild(cta);
 
@@ -418,6 +420,8 @@ export class Banners {
 
     this.container = container;
     this.styleEl = style;
+    // Counted when it is on the page, which is what a tap rate divides by.
+    this.report('view', banner.id);
 
     // Animate in. Body padding only added in pinned mode; floating overlays
     // and stacked sits in flow.

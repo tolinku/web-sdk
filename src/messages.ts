@@ -14,12 +14,40 @@ interface RenderContext {
   app: MessageAppContext | null;
 }
 
+/** Longest tapped URL a message beacon carries, so the body stays under the server's 2 KB. */
+const MAX_REPORTED_URL = 1000;
+
 export class Messages {
   private overlay: HTMLDivElement | null = null;
   private styleEl: HTMLStyleElement | null = null;
   private app: MessageAppContext | null = null;
 
+  private tapped = false;
+
   constructor(private client: HttpClient) {}
+
+  /**
+   * Tell the server a message was shown, closed, or had a button tapped, so the dashboard has
+   * numbers per message. A plain-text beacon (no preflight, survives a navigation) carrying the
+   * publishable key in the body, since a beacon can't set headers. Never throws.
+   */
+  private report(messageId: string, kind: 'view' | 'dismiss' | 'tap', url?: string): void {
+    // A close after a tap is the message finishing, not somebody turning it down; the dashboard
+    // counts closes as "closed without tapping", the same as the message page does on mobile.
+    if (kind === 'view') this.tapped = false;
+    if (kind === 'tap') this.tapped = true;
+    if (kind === 'dismiss' && this.tapped) return;
+    try {
+      const endpoint = this.client.baseUrl + '/v1/api/messages/' + encodeURIComponent(messageId) + '/event';
+      // The server takes at most 2 KB; a long tapped URL is cut to keep under it.
+      const body = JSON.stringify(url ? { kind, apiKey: this.client.key, url: url.slice(0, MAX_REPORTED_URL) } : { kind, apiKey: this.client.key });
+      const nav = navigator as Navigator & { sendBeacon?: (u: string, d?: BodyInit) => boolean };
+      if (typeof nav.sendBeacon === 'function' && nav.sendBeacon(endpoint, body)) return;
+      void fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body, keepalive: true }).catch(() => {});
+    } catch {
+      /* reporting must never break the message */
+    }
+  }
 
   /** Fetch messages and show the highest-priority non-dismissed one */
   async show(options: ShowMessageOptions = {}, userId?: string | null): Promise<void> {
@@ -46,6 +74,7 @@ export class Messages {
     const message = candidates[0];
     recordMessageImpression(message.id);
     this.render(message, options);
+    this.report(message.id, 'view');
   }
 
   /** Remove the message overlay */
@@ -100,6 +129,7 @@ export class Messages {
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) {
         saveMessageDismissal(message.id);
+        this.report(message.id, 'dismiss');
         options.onDismiss?.(message.id);
         this.dismiss();
       }
@@ -146,6 +176,7 @@ export class Messages {
     closeBtn.textContent = '×';
     closeBtn.addEventListener('click', () => {
       saveMessageDismissal(message.id);
+      this.report(message.id, 'dismiss');
       options.onDismiss?.(message.id);
       this.dismiss();
     });
@@ -435,6 +466,7 @@ export class Messages {
       // page load of the word close.
       if (action === 'close') {
         saveMessageDismissal(context.messageId);
+        this.report(context.messageId, 'dismiss');
         context.options.onDismiss?.(context.messageId);
         this.dismiss();
         return;
@@ -443,6 +475,7 @@ export class Messages {
       // comes from message content and a handler is ordinary app code that will
       // reasonably open whatever it is handed without looking at it.
       if (action && !isNavigableUrl(action)) return;
+      if (action) this.report(context.messageId, 'tap', action);
       if (context.options.onButtonPress) {
         context.options.onButtonPress(action, context.messageId);
       } else if (action) {

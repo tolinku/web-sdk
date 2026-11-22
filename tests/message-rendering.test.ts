@@ -27,6 +27,7 @@ const APP: MessageAppContext = {
 function createMockClient(): HttpClient {
   return {
     baseUrl: 'https://api.example.com',
+    key: 'tolk_pub_test',
     post: vi.fn().mockResolvedValue({}),
     get: vi.fn().mockResolvedValue({ messages: [] }),
     getPublic: vi.fn().mockResolvedValue({}),
@@ -1073,5 +1074,58 @@ describe('spacing parity with the server renderer', () => {
     }
     expect((card.querySelector('img') as HTMLElement).style.margin).toBe('');
     expect((card.querySelector('hr') as HTMLElement).style.margin).toBe('0px');
+  });
+});
+
+describe('reporting', () => {
+  let sent: { url: string; body: Record<string, unknown> }[];
+  beforeEach(() => {
+    sent = [];
+    (navigator as Navigator & { sendBeacon?: unknown }).sendBeacon = (url: string, body: string) => { sent.push({ url, body: JSON.parse(body) }); return true; };
+  });
+  afterEach(() => { delete (navigator as Navigator & { sendBeacon?: unknown }).sendBeacon; });
+
+  const endpoint = 'https://api.example.com/v1/api/messages/msg-1/event';
+
+  it('reports a view when the message is shown, with the publishable key in the body', async () => {
+    await show({ root: { props: {} }, content: [component('Text', { text: 'Hi' })] });
+    expect(sent).toEqual([{ url: endpoint, body: { kind: 'view', apiKey: 'tolk_pub_test' } }]);
+  });
+
+  it('reports a dismissal from the close button', async () => {
+    const card = await show({ root: { props: {} }, content: [component('Text', { text: 'Hi' })] });
+    (card.querySelector('.tolk-msg-close') as HTMLButtonElement).click();
+    expect(sent.map((x) => x.body.kind)).toEqual(['view', 'dismiss']);
+  });
+
+  it('reports a tap with where the button goes, and no dismissal for a close after it', async () => {
+    const card = await show({ root: { props: {} }, content: [component('Button', { label: 'Go', action: 'https://pantry.app/deals' }), component('Button', { label: 'No thanks', action: 'close' })] }, { onButtonPress: () => {} });
+    const [go, close] = contentButtons(card);
+    go.click();
+    close.click();
+    expect(sent.map((x) => x.body)).toEqual([
+      { kind: 'view', apiKey: 'tolk_pub_test' },
+      { kind: 'tap', apiKey: 'tolk_pub_test', url: 'https://pantry.app/deals' },
+    ]);
+  });
+
+  it('cuts a long tapped URL to 1000 characters', async () => {
+    const long = 'https://pantry.app/deals?x=' + 'a'.repeat(3000);
+    const card = await show({ root: { props: {} }, content: [component('Button', { label: 'Go', action: long })] }, { onButtonPress: () => {} });
+    contentButtons(card)[0].click();
+    const tap = sent.find((x) => x.body.kind === 'tap');
+    expect(tap?.body.url).toBe(long.slice(0, 1000));
+  });
+
+  it('reports a close action as a dismissal when nothing was tapped', async () => {
+    const card = await show({ root: { props: {} }, content: [component('Button', { label: 'No thanks', action: 'close' })] });
+    contentButtons(card)[0].click();
+    expect(sent.map((x) => x.body.kind)).toEqual(['view', 'dismiss']);
+  });
+
+  it('does not report a tap on a button it refuses to follow', async () => {
+    const card = await show({ root: { props: {} }, content: [component('Button', { label: 'Bad', action: 'javascript:alert(1)' })] }, { onButtonPress: () => {} });
+    contentButtons(card)[0].click();
+    expect(sent.map((x) => x.body.kind)).toEqual(['view']);
   });
 });

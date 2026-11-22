@@ -217,3 +217,74 @@ describe('Banners - dismiss persistence (storage.ts)', () => {
     expect(isBannerDismissed('unknown', 7)).toBe(false);
   });
 });
+
+describe('Banners - reporting', () => {
+  let client: ReturnType<typeof createMockClient>;
+  let banners: Banners;
+  let beacon: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    localStorage.clear();
+    // Earlier suites leave banners that are still animating out.
+    document.querySelectorAll('#tolinku-banner').forEach((el) => el.remove());
+    client = createMockClient();
+    banners = new Banners(client);
+    beacon = vi.fn().mockReturnValue(true);
+    (navigator as Navigator & { sendBeacon?: unknown }).sendBeacon = beacon;
+    (client.getPublic as ReturnType<typeof vi.fn>).mockResolvedValue(makeBannerConfig());
+  });
+
+  afterEach(() => {
+    banners.dismiss();
+    delete (navigator as Navigator & { sendBeacon?: unknown }).sendBeacon;
+    vi.restoreAllMocks();
+  });
+
+  const sent = () => beacon.mock.calls.map(([url, body]) => ({ url: String(url), body: JSON.parse(String(body)) }));
+
+  it('reports a view when the banner is shown, as a plain-text beacon', async () => {
+    await banners.show();
+    expect(sent()).toEqual([{ url: 'https://api.example.com/v1/api/banner/view', body: { banner_id: 'banner-1', page: location.origin + location.pathname } }]);
+    expect(typeof beacon.mock.calls[0][1]).toBe('string');
+  });
+
+  it('leaves the query string and fragment out of the page it reports', async () => {
+    history.replaceState(null, '', '/pricing?token=secret#top');
+    try {
+      await banners.show();
+      expect(sent()[0].body.page).toBe(location.origin + '/pricing');
+    } finally {
+      history.replaceState(null, '', '/');
+    }
+  });
+
+  it('reports a dismissal when the close button is pressed', async () => {
+    await banners.show();
+    (document.querySelector('#tolinku-banner .tolk-close') as HTMLButtonElement).click();
+    expect(sent().map((x) => x.url)).toEqual(['https://api.example.com/v1/api/banner/view', 'https://api.example.com/v1/api/banner/dismiss']);
+  });
+
+  it('reports a tap with where it went', async () => {
+    await banners.show();
+    const cta = document.querySelector('#tolinku-banner .tolk-cta') as HTMLAnchorElement;
+    cta.addEventListener('click', (e) => e.preventDefault());
+    cta.click();
+    const tap = sent().find((x) => x.url.endsWith('/banner/click'));
+    expect(tap?.body).toMatchObject({ banner_id: 'banner-1', target: 'https://example.com/download' });
+  });
+
+  it('does not report a view for a banner it never showed', async () => {
+    saveBannerDismissal('banner-1');
+    await banners.show();
+    expect(beacon).not.toHaveBeenCalled();
+  });
+
+  it('falls back to fetch when the beacon is refused', async () => {
+    beacon.mockReturnValue(false);
+    const f = vi.fn().mockResolvedValue({});
+    vi.stubGlobal('fetch', f);
+    await banners.show();
+    expect(f).toHaveBeenCalledWith('https://api.example.com/v1/api/banner/view', expect.objectContaining({ method: 'POST', keepalive: true, headers: { 'Content-Type': 'text/plain' } }));
+    vi.unstubAllGlobals();
+  });
+});

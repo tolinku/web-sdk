@@ -44,37 +44,129 @@ export class Links {
   /**
    * What this link means, or null if it means nothing here.
    *
-   * The question goes to the link's own host, because that is how Tolinku knows
-   * which Appspace is being asked about, which also means a link on a domain
-   * that is not yours simply answers nothing.
+   * The question goes to the link's own host first, because that is how Tolinku
+   * knows which Appspace is being asked about, which also means a link on a
+   * domain that is not yours simply answers nothing there.
+   *
+   * If that host gives no reply Tolinku would give (on the web, a third-party
+   * click-tracking host usually refuses the request outright under CORS),
+   * Tolinku's own API is asked once with the whole link. A link in an email
+   * usually arrives wrapped in the email platform's click-tracking URL, on a
+   * host that has never heard of Tolinku; the API knows how to unwrap those,
+   * and the publishable key tells it which Appspace is asking.
+   *
+   * Each question is asked once, with a short time limit: resolving a link
+   * counts a click on the server, so a retry would count it twice.
    *
    * Never throws. A link that cannot be resolved, for a bad network or any
    * other reason, is one to fall back to your own handling for.
    */
   async resolve(url: string): Promise<ResolvedLink | null> {
-    if (!url || typeof url !== 'string') return null;
-
-    let parsed: URL;
     try {
-      parsed = new URL(url.trim());
-    } catch {
-      return null;
-    }
-
-    // http and https only. A custom scheme link already carries the path that
-    // is wanted, and anything else is not a link this could answer for.
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
-
-    try {
-      const result = await this.client.postPublicToOrigin<ResolvedLink>(
-        parsed.origin,
-        '/v1/api/path',
-        { path: parsed.pathname },
-      );
-      if (!result || !result.route || !isRoutablePath(result.deep_link_path)) return null;
-      return result;
+      return await this.resolveLink(url);
     } catch {
       return null;
     }
   }
+
+  private async resolveLink(url: string): Promise<ResolvedLink | null> {
+    if (!url || typeof url !== 'string') return null;
+
+    const link = normaliseLink(url);
+    if (!link) return null;
+
+    // The whole link goes along with the path. Older servers read only the
+    // path; a click-tracking domain needs the rest, because SendGrid and others
+    // keep the real destination in the query string.
+    const own = await this.client.postOnce(
+      link.origin + '/v1/api/path',
+      { path: link.path, url: link.whole },
+      { authenticated: false, timeoutMs: RESOLVE_TIMEOUT_MS },
+    );
+    if (own && own.status === 200 && isAnswer(own.data)) return own.data;
+
+    // Tolinku's own reply, even a "no": the host is ours and has answered, and
+    // asking again would count the click twice.
+    if (own && isTolinkuReply(own.data)) return null;
+
+    if (!this.shouldAskApi(link.hostname)) return null;
+
+    const api = await this.client.postOnce(
+      this.client.baseUrl + '/v1/api/links/resolve',
+      { url: link.whole },
+      { authenticated: true, timeoutMs: RESOLVE_TIMEOUT_MS },
+    );
+    if (api && api.status === 200 && isAnswer(api.data)) return api.data;
+    return null;
+  }
+
+  /**
+   * Whether a second question to Tolinku's own API could add anything.
+   *
+   * Not without a key, since the API would not know which Appspace is asking.
+   * Not when the link is already on the API's host either: that host was just
+   * asked, and asking again only doubles the wait for the same answer.
+   */
+  private shouldAskApi(hostname: string): boolean {
+    if (!this.client.key) return false;
+    try {
+      return new URL(this.client.baseUrl).hostname.toLowerCase() !== hostname;
+    } catch {
+      return false;
+    }
+  }
+}
+
+/** How long each of the two resolve questions may take. */
+const RESOLVE_TIMEOUT_MS = 5000;
+
+interface NormalisedLink {
+  /** https://host[:port], the port only when it is not a default one */
+  origin: string;
+  /** Lowercased, without the port */
+  hostname: string;
+  /** The percent-encoded path */
+  path: string;
+  /** origin + path + query, without the fragment */
+  whole: string;
+}
+
+/**
+ * The one form of a link used for everything that follows: trimmed, without
+ * the fragment, scheme and host lowercased, http upgraded to https (every
+ * Tolinku and click domain serves https), a default port (443 or 80) dropped,
+ * and the path and query left as they were.
+ */
+function normaliseLink(input: string): NormalisedLink | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(input.trim());
+  } catch {
+    return null;
+  }
+
+  // http and https only. A custom scheme link already carries the path that
+  // is wanted, and anything else is not a link this could answer for.
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+
+  const hostname = parsed.hostname.toLowerCase();
+  const port = parsed.port === '' || parsed.port === '443' || parsed.port === '80' ? '' : ':' + parsed.port;
+  const origin = 'https://' + hostname + port;
+  const path = parsed.pathname;
+  return { origin, hostname, path, whole: origin + path + parsed.search };
+}
+
+/** A reply in Tolinku's own shape: a JSON object with a string `error`. */
+function isTolinkuReply(data: unknown): boolean {
+  return typeof data === 'object' && data !== null && typeof (data as { error?: unknown }).error === 'string';
+}
+
+/**
+ * Whether a reply is a usable answer: a route, and a deep link path that is a
+ * path and nothing else.
+ */
+function isAnswer(data: unknown): data is ResolvedLink {
+  if (typeof data !== 'object' || data === null) return false;
+  const result = data as ResolvedLink;
+  return !!result.route && isRoutablePath(result.deep_link_path);
 }

@@ -82,28 +82,54 @@ export class HttpClient {
   }
 
   /**
-   * POST to a host other than the configured one, without the API key.
+   * One POST, no retries, with a time limit, reporting what came back instead
+   * of throwing.
    *
-   * A few public endpoints work out which Appspace they belong to from the
-   * hostname the request arrives on rather than from a key or an id, so a
-   * question about a link on a customer's own domain has to be asked on that
-   * domain. No key goes with it: the origin comes from a URL the caller was
-   * handed, which is not necessarily ours.
+   * For questions where asking twice is worse than not getting an answer:
+   * resolving a link counts as a click on the server, so a retry would count
+   * it again. The caller decides what a reply means, so this hands back the
+   * status and the parsed JSON body. It resolves to null when there was no
+   * readable reply: a network error, a CORS refusal (which a browser reports
+   * as a network error), the time limit, or a body that is not JSON.
+   *
+   * `url` is absolute. With `authenticated` the SDK's normal headers go along
+   * (the API key); without it only Content-Type does, for a request to a host
+   * taken from a URL the caller was handed, which is not necessarily ours.
    */
-  async postPublicToOrigin<T>(origin: string, path: string, body?: Record<string, unknown>): Promise<T> {
-    const res = await this.fetchWithRetry(origin.replace(/\/+$/, '') + path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: this.signal,
-    });
+  async postOnce(
+    url: string,
+    body: Record<string, unknown>,
+    options: { authenticated: boolean; timeoutMs: number },
+  ): Promise<{ status: number; data: unknown } | null> {
+    const controller = new AbortController();
+    const outer = this.signal;
+    const onAbort = () => controller.abort();
+    if (outer.aborted) controller.abort();
+    else outer.addEventListener('abort', onAbort, { once: true });
+    const timer = setTimeout(() => controller.abort(), options.timeoutMs);
 
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({ error: res.statusText }));
-      throw new TolinkuError(data.error || res.statusText, res.status, data.code);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: options.authenticated
+          ? { ...this.headers(), 'Content-Type': 'application/json' }
+          : { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      let data: unknown;
+      try {
+        data = await res.json();
+      } catch {
+        return null;
+      }
+      return { status: res.status, data };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+      outer.removeEventListener('abort', onAbort);
     }
-
-    return this.parseJson<T>(res);
   }
 
   /** GET without API key auth (for public endpoints like banner config) */

@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.8.2
+
+### Added
+
+- Smart banners report when they are shown and when they are closed.
+
+  Until now the dashboard knew a banner had been tapped and nothing else: a
+  view was logged once per page load without saying which banner, and a close
+  was remembered only in the visitor's own storage. So there was no tap rate
+  for any one banner, and no way to see that people were closing it. The
+  dashboard's banner pages now show views, tap rate and closes per banner.
+
+  Sent as plain-text beacons, which browsers deliver cross-origin without a
+  preflight, and never awaited: a banner that cannot report still works. Taps
+  use the same plain-text beacon now; the server accepts either form. The page
+  goes without its query string, which can carry tokens.
+
+- In-app messages report when they are shown, closed, and when a button is
+  tapped, the same way. On iOS, Android, Flutter and React Native the message's
+  own page does this, so those SDKs need no update; this covers messages the
+  web SDK draws itself. The publishable key travels in the beacon body, since a
+  beacon can't set headers. A tapped URL longer than 1000 characters is cut
+  short, to keep the beacon under the server's 2 KB limit.
+
+  Release the platform first: it adds the two endpoints and teaches the tap
+  endpoint to read a plain-text body. Against an older server a view or close
+  goes nowhere, and a tap is still counted but without saying which banner.
+
+### Changed
+
+- Links.resolve unwraps links from emails (SendGrid, Amazon SES, Braze, Klaviyo,
+  Iterable, Salesforce Marketing Cloud, Customer.io). It sends the whole link
+  along with the path, cleaned up first: no fragment, scheme and host in lower
+  case, http upgraded to https, and no default port.
+
+  It asks the link's own host once, with a 5 second time limit and no retries,
+  since each request counts a click. If that host is Tolinku and says no, that
+  is the answer. If it gives no Tolinku answer at all (on the web a
+  click-tracking host usually refuses the request under CORS), and it isn't the
+  configured Tolinku API host, it asks the Tolinku API once more, the same way,
+  with the publishable key. Either answer gets the same checks as before, and
+  resolve still never throws.
+
 ## 0.8.1
 
 ### Added
