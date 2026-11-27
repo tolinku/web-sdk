@@ -24,6 +24,12 @@ function sanitizeCssColor(value: string | undefined): string | null {
   return null;
 }
 
+
+const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
+const DESKTOP_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+/** Banners show only in phone browsers, so the suites that show one act as an iPhone. */
+const actAs = (ua: string) => vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(ua);
+
 function createMockClient(): HttpClient {
   return {
     baseUrl: 'https://api.example.com',
@@ -135,6 +141,7 @@ describe('Banners - priority sorting', () => {
 
   beforeEach(() => {
     // Set up minimal DOM environment
+    actAs(IPHONE_UA);
     client = createMockClient();
     banners = new Banners(client);
   });
@@ -227,6 +234,7 @@ describe('Banners - reporting', () => {
     localStorage.clear();
     // Earlier suites leave banners that are still animating out.
     document.querySelectorAll('#tolinku-banner').forEach((el) => el.remove());
+    actAs(IPHONE_UA);
     client = createMockClient();
     banners = new Banners(client);
     beacon = vi.fn().mockReturnValue(true);
@@ -286,5 +294,51 @@ describe('Banners - reporting', () => {
     await banners.show();
     expect(f).toHaveBeenCalledWith('https://api.example.com/v1/api/banner/view', expect.objectContaining({ method: 'POST', keepalive: true, headers: { 'Content-Type': 'text/plain' } }));
     vi.unstubAllGlobals();
+  });
+});
+
+describe('Banners - phones only', () => {
+  let client: ReturnType<typeof createMockClient>;
+  let banners: Banners;
+
+  beforeEach(() => {
+    localStorage.clear();
+    document.querySelectorAll('#tolinku-banner').forEach((el) => el.remove());
+    client = createMockClient();
+    banners = new Banners(client);
+    (client.getPublic as ReturnType<typeof vi.fn>).mockResolvedValue(makeBannerConfig());
+  });
+
+  afterEach(() => {
+    banners.dismiss();
+    vi.restoreAllMocks();
+  });
+
+  it('shows nothing on a desktop browser, and doesn\'t even ask for the config', async () => {
+    actAs(DESKTOP_UA);
+    await banners.show();
+    expect(client.getPublic).not.toHaveBeenCalled();
+    expect(document.getElementById('tolinku-banner')).toBeNull();
+  });
+
+  it('shows on desktop when the site asks for it with allowDesktop', async () => {
+    actAs(DESKTOP_UA);
+    await banners.show({ allowDesktop: true });
+    expect(client.getPublic).toHaveBeenCalled();
+    expect(document.getElementById('tolinku-banner')).not.toBeNull();
+  });
+
+  it('shows on Android', async () => {
+    actAs('Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36');
+    await banners.show();
+    expect(document.getElementById('tolinku-banner')).not.toBeNull();
+  });
+
+  it('gives the close mark a 44px tap area without changing how it looks', async () => {
+    actAs(IPHONE_UA);
+    await banners.show();
+    const css = Array.from(document.querySelectorAll('style')).map((st) => st.textContent || '').join('\n');
+    expect(css).toMatch(/\.tolk-close::before\s*\{[^}]*width:\s*44px[^}]*height:\s*44px/);
+    expect(css).toMatch(/\.tolk-close\s*\{[^}]*font-size:\s*20px/);
   });
 });

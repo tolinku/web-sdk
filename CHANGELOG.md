@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.3
+
+### Changed
+- Smart banners show only in phone browsers (iPhone, iPad and Android), the
+  same as the banner.js script tag. On a computer there is no app to open, and
+  the dashboard has always said banners only show on phones; the SDK was the
+  one place that drew them on desktop too. A site that wants them there passes
+  `allowDesktop: true` to `banners.show()`. On a computer the SDK no longer
+  asks for the banner config at all.
+- The banner's close mark has a 44px tap area, the minimum Apple and Google
+  recommend for a phone. It looks exactly the same and the layout doesn't move;
+  only the area that answers a tap is bigger.
+
 ## 0.8.2
 
 ### Added

@@ -53,6 +53,12 @@ function sanitizeClass(val: string | undefined): string {
 }
 
 
+/** An iPhone, iPad or Android browser: the same test banner.js uses. False where there is no navigator. */
+function isPhoneBrowser(): boolean {
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+  return /iPhone|iPad|iPod|Android/i.test(ua);
+}
+
 export class Banners {
   private container: HTMLDivElement | null = null;
   private styleEl: HTMLStyleElement | null = null;
@@ -95,6 +101,9 @@ export class Banners {
 
   /** Fetch banner config and show the highest-priority banner */
   async show(options: ShowBannerOptions = {}, userId?: string | null): Promise<void> {
+    // Banners are for phone browsers, as banner.js shows them: on a computer there is no app to
+    // open. allowDesktop shows them there too, for a site that really wants that.
+    if (!options.allowDesktop && !isPhoneBrowser()) return;
     const params: Record<string, string> = {};
     if (userId) params.user_id = userId;
     const config = await this.client.getPublic<BannerConfig>('/v1/api/banner/config', params);
@@ -307,7 +316,10 @@ export class Banners {
       #tolinku-banner .tolk-close {
         background: none; border: none; font-size: 20px; line-height: 1;
         cursor: pointer; color: ${titleColor}; opacity: 0.6; padding: 0 4px; flex-shrink: 0;
+        position: relative;
       }
+      /* A 44px tap area around the same-looking mark: easy to hit on a phone, no change to the layout. */
+      #tolinku-banner .tolk-close::before { content: ""; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
       #tolinku-banner .tolk-close:hover { opacity: 1; }
       #tolinku-banner .tolk-icon {
         width: ${iconSize}px; height: ${iconSize}px; border-radius: ${iconRadius}px;

@@ -6,7 +6,7 @@
  *
  * Keep in step with package.json. `tests/version.test.ts` fails if it drifts.
  */
-export const SDK_VERSION = '0.8.2';
+export const SDK_VERSION = '0.8.3';
 
 /** Configuration options for the Tolinku SDK */
 export interface TolinkuConfig {
@@ -171,6 +171,9 @@ export interface ShowBannerOptions {
   theme?: 'light' | 'dark';
   label?: string;
   delay?: number;
+  /** Show the banner on desktop browsers too. By default banners show only in phone browsers
+   *  (iPhone, iPad, Android), as banner.js does. */
+  allowDesktop?: boolean;
   /** Stacked-mode only: CSS selector for the element to inject before (top) or after (bottom).
    *  Falls back to auto-detect when omitted. */
   anchor?: string;

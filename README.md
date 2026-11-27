@@ -160,6 +160,12 @@ tolinku.dismissBanner();
 
 Banners include an app icon, title, body text, and a call-to-action button. Dismissal state is tracked so banners do not reappear until the configured duration has passed.
 
+Banners show only in phone browsers (iPhone, iPad and Android), like the banner.js script tag. To show them on desktop browsers too, pass `allowDesktop: true`:
+
+```javascript
+await tolinku.showBanner({ position: 'top', allowDesktop: true });
+```
+
 ### Resolving a Link
 
 Short links arrive as an opaque code, `/s7k2p9q/4821`. On the open web you will
