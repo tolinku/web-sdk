@@ -55,8 +55,9 @@ export class Links {
    * host that has never heard of Tolinku; the API knows how to unwrap those,
    * and the publishable key tells it which Appspace is asking.
    *
-   * Each question is asked once, with a short time limit: resolving a link
-   * is recorded as an API call on the server (not a click), so a retry would count it twice.
+   * Each question is asked once, with a short time limit: the server unwraps
+   * an email link once, and that request is how the email platform counts its
+   * click (Tolinku records no click of its own), so a retry could count it twice.
    *
    * Never throws. A link that cannot be resolved, for a bad network or any
    * other reason, is one to fall back to your own handling for.
@@ -86,8 +87,11 @@ export class Links {
     if (own && own.status === 200 && isAnswer(own.data)) return own.data;
 
     // Tolinku's own reply, even a "no": the host is ours and has answered, and
-    // asking again would count a second API call.
-    if (own && isTolinkuReply(own.data)) return null;
+    // asking again would only repeat the question. An email platform's host can
+    // answer in JSON with an `error` field too, so the reply has to say it is
+    // Tolinku's (X-Tolinku: 1). A server that predates that header is trusted by
+    // its body only on Tolinku's own domain.
+    if (own && (own.tolinku || (isErrorReply(own.data) && this.isTolinkuDomain(link.hostname)))) return null;
 
     if (!this.shouldAskApi(link.hostname)) return null;
 
@@ -98,6 +102,22 @@ export class Links {
     );
     if (api && api.status === 200 && isAnswer(api.data)) return api.data;
     return null;
+  }
+
+  /**
+   * Whether a host is Tolinku's own: the API's host, or a host under the same
+   * parent domain (an Appspace's tolinku.com subdomain). Used only for replies
+   * without the X-Tolinku header, which servers before it was added never send.
+   */
+  private isTolinkuDomain(hostname: string): boolean {
+    try {
+      const api = new URL(this.client.baseUrl).hostname.toLowerCase();
+      if (hostname === api) return true;
+      const labels = api.split('.');
+      return labels.length > 2 && hostname.endsWith('.' + labels.slice(-2).join('.'));
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -156,8 +176,8 @@ function normaliseLink(input: string): NormalisedLink | null {
   return { origin, hostname, path, whole: origin + path + parsed.search };
 }
 
-/** A reply in Tolinku's own shape: a JSON object with a string `error`. */
-function isTolinkuReply(data: unknown): boolean {
+/** A reply in Tolinku's error shape: a JSON object with a string `error`. Any host can send one. */
+function isErrorReply(data: unknown): boolean {
   return typeof data === 'object' && data !== null && typeof (data as { error?: unknown }).error === 'string';
 }
 

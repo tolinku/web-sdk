@@ -31,14 +31,14 @@ const answer: ResolvedLink = {
 const OWN_PATH = '/v1/api/path';
 const API_RESOLVE = 'https://api.example.com/v1/api/links/resolve';
 
-type Reply = { status: number; body?: unknown; notJson?: boolean } | Error;
+type Reply = { status: number; body?: unknown; notJson?: boolean; tolinku?: boolean } | Error;
 
 function response(reply: Exclude<Reply, Error>): Response {
   return {
     ok: reply.status >= 200 && reply.status < 300,
     status: reply.status,
     statusText: 'x',
-    headers: new Headers(),
+    headers: new Headers(reply.tolinku ? { 'X-Tolinku': '1' } : {}),
     json: reply.notJson
       ? vi.fn().mockRejectedValue(new SyntaxError('Unexpected token <'))
       : vi.fn().mockResolvedValue(reply.body),
@@ -208,6 +208,38 @@ describe('when the link\'s own host is Tolinku and says no', () => {
     serve({ status: 500, body: { error: 'Internal error' } }, ok);
     expect(await links().resolve('https://links.example.com/x/1')).toBeNull();
     expect(calls()).toHaveLength(1);
+  });
+});
+
+describe('telling Tolinku\'s reply from an email platform\'s', () => {
+  const esp = 'https://click.mailer.com/ls/click?upn=XYZ';
+
+  it('an email platform that answers in JSON with an error field does not stop the unwrap', async () => {
+    serve({ status: 404, body: { error: 'Link not found' } }, ok);
+    const link = await links().resolve(esp);
+    expect(apiCalls()).toHaveLength(1);
+    expect(link?.deep_link_path).toBe('/order/4821/receipt');
+  });
+
+  it('a reply marked X-Tolinku is Tolinku\'s answer on any host, and stops there', async () => {
+    serve({ status: 404, body: { error: 'Route not found' }, tolinku: true }, ok);
+    expect(await links().resolve('https://go.brand.com/x/1')).toBeNull();
+    expect(apiCalls()).toHaveLength(0);
+  });
+
+  it('a marked reply stops even without an error field', async () => {
+    serve({ status: 200, body: {}, tolinku: true }, ok);
+    expect(await links().resolve('https://go.brand.com/x/1')).toBeNull();
+    expect(apiCalls()).toHaveLength(0);
+  });
+
+  it('a server that sends no header is trusted by its error body only on Tolinku\'s own domain', async () => {
+    serve({ status: 404, body: { error: 'Route not found' } }, ok);
+    expect(await links().resolve('https://api.example.com/x/1')).toBeNull();
+    expect(await links().resolve('https://links.example.com/x/1')).toBeNull();
+    expect(apiCalls()).toHaveLength(0);
+    expect(await links().resolve('https://go.brand.com/x/1')).not.toBeNull();
+    expect(apiCalls()).toHaveLength(1);
   });
 });
 

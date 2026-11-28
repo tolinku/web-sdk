@@ -86,9 +86,11 @@ export class HttpClient {
    * of throwing.
    *
    * For questions where asking twice is worse than not getting an answer:
-   * resolving a link is recorded as an API call on the server (not a click), so
-   * a retry would count it again. The caller decides what a reply means, so
-   * this hands back the status and the parsed JSON body. It resolves to null
+   * resolving an email link makes the server request the email platform's
+   * tracked link once, which is how that platform counts the click (Tolinku
+   * records no click of its own), so a retry could count it again. The caller decides what a reply means, so
+   * this hands back the status, the parsed JSON body and whether Tolinku
+   * marked the reply as its own (X-Tolinku: 1). It resolves to null
    * when there was no readable reply: a network error, a CORS refusal (which a browser reports
    * as a network error), the time limit, or a body that is not JSON.
    *
@@ -100,7 +102,7 @@ export class HttpClient {
     url: string,
     body: Record<string, unknown>,
     options: { authenticated: boolean; timeoutMs: number },
-  ): Promise<{ status: number; data: unknown } | null> {
+  ): Promise<{ status: number; data: unknown; tolinku: boolean } | null> {
     const controller = new AbortController();
     const outer = this.signal;
     const onAbort = () => controller.abort();
@@ -123,7 +125,8 @@ export class HttpClient {
       } catch {
         return null;
       }
-      return { status: res.status, data };
+      // X-Tolinku: 1 is on every answer Tolinku's own API gives (a host that is not ours won't send it).
+      return { status: res.status, data, tolinku: res.headers?.get?.('X-Tolinku') === '1' };
     } catch {
       return null;
     } finally {
