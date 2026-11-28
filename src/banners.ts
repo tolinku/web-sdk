@@ -56,7 +56,9 @@ function sanitizeClass(val: string | undefined): string {
 /** An iPhone, iPad or Android browser: the same test banner.js uses. False where there is no navigator. */
 function isPhoneBrowser(): boolean {
   const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
-  return /iPhone|iPad|iPod|Android/i.test(ua);
+  if (/iPhone|iPad|iPod|Android/i.test(ua)) return true;
+  // iPadOS Safari reports itself as a Mac by default; a Mac with a touch screen is an iPad.
+  return /Macintosh/.test(ua) && typeof navigator !== 'undefined' && navigator.maxTouchPoints > 1;
 }
 
 export class Banners {

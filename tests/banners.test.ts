@@ -29,6 +29,8 @@ const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleW
 const DESKTOP_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 /** Banners show only in phone browsers, so the suites that show one act as an iPhone. */
 const actAs = (ua: string) => vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(ua);
+/** jsdom has no maxTouchPoints; define it for one test (removed again in afterEach). */
+const touchPoints = (n: number) => Object.defineProperty(navigator, 'maxTouchPoints', { value: n, configurable: true });
 
 function createMockClient(): HttpClient {
   return {
@@ -312,6 +314,7 @@ describe('Banners - phones only', () => {
   afterEach(() => {
     banners.dismiss();
     vi.restoreAllMocks();
+    delete (navigator as unknown as Record<string, unknown>).maxTouchPoints;
   });
 
   it('shows nothing on a desktop browser, and doesn\'t even ask for the config', async () => {
@@ -332,6 +335,20 @@ describe('Banners - phones only', () => {
     actAs('Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36');
     await banners.show();
     expect(document.getElementById('tolinku-banner')).not.toBeNull();
+  });
+
+  it('shows on an iPad, which Safari reports as a Mac with a touch screen', async () => {
+    actAs('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15');
+    touchPoints(5);
+    await banners.show();
+    expect(document.getElementById('tolinku-banner')).not.toBeNull();
+  });
+
+  it('a Mac without a touch screen is still a desktop', async () => {
+    actAs(DESKTOP_UA);
+    touchPoints(0);
+    await banners.show();
+    expect(document.getElementById('tolinku-banner')).toBeNull();
   });
 
   it('gives the close mark a 44px tap area without changing how it looks', async () => {
