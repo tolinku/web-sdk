@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Messages, sanitizeCssUrl } from '../src/messages.js';
+import { Messages, sanitizeCssUrl, matchesTriggerValue } from '../src/messages.js';
 import { isSafeUrl } from '../src/url-safety.js';
 import type { HttpClient } from '../src/client.js';
 import type { Message } from '../src/types.js';
@@ -217,5 +217,80 @@ describe('Messages - button click handler', () => {
     // location spy and then asserted nothing about it, so a button that did
     // navigate to javascript: would have passed.
     expect(navigation.href).toBeNull();
+  });
+});
+
+describe('Messages - trigger_value, close mark and line breaks', () => {
+  let client: ReturnType<typeof createMockClient>;
+  let messages: Messages;
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    document.head.innerHTML = '';
+    client = createMockClient();
+    messages = new Messages(client);
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn().mockReturnValue(null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    messages.dismiss();
+    vi.restoreAllMocks();
+  });
+
+  it('sends triggerValue as trigger_value', async () => {
+    await messages.show({ trigger: 'event', triggerValue: 'purchase' });
+    expect(client.get).toHaveBeenCalledWith('/v1/api/messages', { trigger: 'event', trigger_value: 'purchase' });
+  });
+
+  it('sends no trigger_value without a triggerValue', async () => {
+    await messages.show({ trigger: 'event' });
+    expect(client.get).toHaveBeenCalledWith('/v1/api/messages', { trigger: 'event' });
+  });
+
+  it('keeps messages that name no event, the same as the server', () => {
+    const returned = [
+      { id: 'purchase', trigger_value: 'purchase' },
+      { id: 'signup', trigger_value: 'signup' },
+      { id: 'any', trigger_value: null },
+      { id: 'empty', trigger_value: '' },
+    ];
+    expect(returned.filter(m => matchesTriggerValue(m, 'purchase')).map(m => m.id)).toEqual(['purchase', 'any', 'empty']);
+    expect(returned.filter(m => matchesTriggerValue(m)).map(m => m.id)).toEqual(['purchase', 'signup', 'any', 'empty']);
+  });
+
+  it('shows a message that names no event when one is asked for', async () => {
+    (client.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [makeMessage({ id: 'other', trigger: 'event', trigger_value: 'signup', priority: 99 }), makeMessage({ id: 'any', trigger: 'event', trigger_value: null })],
+    });
+    const onDismiss = vi.fn();
+    await messages.show({ trigger: 'event', triggerValue: 'purchase', onDismiss });
+    (document.querySelector('.tolk-msg-close') as HTMLButtonElement).click();
+    expect(onDismiss).toHaveBeenCalledWith('any');
+  });
+
+  it('draws the close mark white on a dark disc, whatever the card colour', async () => {
+    (client.get as ReturnType<typeof vi.fn>).mockResolvedValue({ messages: [makeMessage()] });
+    await messages.show();
+    const css = document.head.querySelector('style')!.textContent || '';
+    const rule = css.slice(css.indexOf('.tolk-msg-close {'), css.indexOf('}', css.indexOf('.tolk-msg-close {')));
+    expect(rule).toContain('color: #ffffff');
+    expect(rule).toContain('background: rgba(0,0,0,0.45)');
+    expect(rule).not.toContain('color: inherit');
+    expect(css).toMatch(/\.tolk-msg-close::before \{[^}]*width: 44px; height: 44px/);
+    expect(document.querySelector('.tolk-msg-close')!.getAttribute('aria-label')).toBe('Close message');
+  });
+
+  it('keeps line breaks in a TextBlock', async () => {
+    (client.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [makeMessage({ content: { root: { props: {} }, content: [{ type: 'TextBlock', props: { content: '• One\n• Two' } }] } })],
+    });
+    await messages.show();
+    const p = document.querySelector('.tolk-msg-card p') as HTMLParagraphElement;
+    expect(p.textContent).toBe('• One\n• Two');
+    expect(p.style.whiteSpace).toBe('pre-line');
   });
 });

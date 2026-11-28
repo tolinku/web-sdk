@@ -53,6 +53,7 @@ export class Messages {
   async show(options: ShowMessageOptions = {}, userId?: string | null): Promise<void> {
     const params: Record<string, string> = {};
     if (options.trigger) params.trigger = options.trigger;
+    if (options.triggerValue) params.trigger_value = options.triggerValue;
     if (userId) params.user_id = userId;
 
     const data = await this.client.get<{ messages: Message[]; app?: MessageAppContext }>('/v1/api/messages', params);
@@ -62,11 +63,12 @@ export class Messages {
     this.app = data.app || null;
     if (!data.messages || data.messages.length === 0) return;
 
-    // Filter dismissed, filter by triggerValue (server only filters by trigger), and sort by priority
+    // Filter dismissed, filter by triggerValue (a server older than trigger_value returns every
+    // message of the trigger), and sort by priority
     const candidates = data.messages
       .filter(m => !isMessageDismissed(m.id, m.dismiss_days))
       .filter(m => !isMessageSuppressed(m.id, m.max_impressions, m.min_interval_hours))
-      .filter(m => !options.triggerValue || m.trigger_value === options.triggerValue)
+      .filter(m => matchesTriggerValue(m, options.triggerValue))
       .sort((a, b) => b.priority - a.priority);
 
     if (candidates.length === 0) return;
@@ -114,12 +116,13 @@ export class Messages {
         box-shadow: 0 20px 60px rgba(0,0,0,0.3);
       }
       .tolk-msg-close {
-        position: absolute; top: 12px; right: 12px;
-        background: rgba(0,0,0,0.1); border: none; border-radius: 50%;
-        width: 28px; height: 28px; font-size: 16px; line-height: 1;
+        position: absolute; top: 12px; right: 12px; padding: 0;
+        background: rgba(0,0,0,0.45); border: none; border-radius: 50%;
+        width: 28px; height: 28px; font-size: 18px; line-height: 1;
         cursor: pointer; display: flex; align-items: center; justify-content: center;
-        color: inherit; opacity: 0.6;
+        color: #ffffff; opacity: 0.9;
       }
+      .tolk-msg-close::before { content: ""; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
       .tolk-msg-close:hover { opacity: 1; }
       .tolk-msg-card img { max-width: 100%; }
     `;
@@ -169,7 +172,10 @@ export class Messages {
     card.style.maxWidth = clamp(authoredNumber(root.contentWidth, 480), 100, 2000) + 'px';
     overlay.style.alignItems = root.verticalAlign === 'top' ? 'flex-start' : 'center';
 
-    // Close button
+    // Close button. A white mark on a dark disc, so it shows on a card of any
+    // colour: it used to inherit the page's text colour at 60% on a faint
+    // disc, and on a dark card it could hardly be seen. The ::before above
+    // gives it a 44px tap area without changing how it looks.
     const closeBtn = document.createElement('button');
     closeBtn.className = 'tolk-msg-close';
     closeBtn.setAttribute('aria-label', 'Close message');
@@ -222,6 +228,7 @@ export class Messages {
       if (message.body) {
         const bodyEl = document.createElement('p');
         bodyEl.textContent = message.body;
+        bodyEl.style.whiteSpace = 'pre-line';
         bodyEl.style.fontSize = '15px';
         bodyEl.style.color = '#555555';
         bodyEl.style.lineHeight = '1.5';
@@ -269,6 +276,9 @@ export class Messages {
       case 'TextBlock': {
         const el = document.createElement('p');
         appendMarkdownText(el, (props.content as string) || '');
+        // Keeps the author's line breaks, which is how a list of bullets is
+        // written in the builder; without it they ran together on one line.
+        el.style.whiteSpace = 'pre-line';
         el.style.fontSize = authoredNumber(props.fontSize, 15) + 'px';
         el.style.color = sanitizeCssColor(props.color as string) || '#555555';
         el.style.textAlign = sanitizeTextAlign(props.alignment as string);
@@ -746,6 +756,18 @@ function appendMarkdownText(el: HTMLElement, text: string): void {
   if (lastIndex < text.length) {
     el.appendChild(document.createTextNode(text.slice(lastIndex)));
   }
+}
+
+/**
+ * Whether a message belongs to a request for `triggerValue`: always when no name was asked for;
+ * otherwise when the message names that one, or names none (a message for any event or
+ * milestone of its trigger). The rule the server applies to `trigger_value`, repeated here for
+ * servers older than it.
+ */
+export function matchesTriggerValue(message: Pick<Message, 'trigger_value'>, triggerValue?: string): boolean {
+  if (!triggerValue) return true;
+  if (!message.trigger_value) return true;
+  return message.trigger_value === triggerValue;
 }
 
 /** Sanitize a URL for use in CSS url() values (escape quotes and backslashes, block dangerous schemes) */

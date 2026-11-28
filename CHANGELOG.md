@@ -12,6 +12,19 @@
 - The banner's close mark has a 44px tap area, the minimum Apple and Google
   recommend for a phone. It looks exactly the same and the layout doesn't move;
   only the area that answers a tap is bigger.
+- `messages.show({ triggerValue })` sends the name to the server as
+  `trigger_value`, and keeps messages of the trigger that name no event or
+  milestone, the same as the server does. It used to filter only in the browser
+  and drop those messages, so a message set to show on any event never showed
+  when a name was given.
+
+### Fixed
+- The in-app message close mark is visible on any card colour. It took the
+  page's text colour at 60% on a faint disc, so on a dark card it could hardly
+  be seen; it is now a white X on a dark disc, with a 44px tap area.
+- Line breaks in a message's text are kept, so a list of bullets written one
+  per line no longer runs together on a single line. The same goes for a
+  message's body when it has no designed content.
 
 ## 0.8.2
 
