@@ -56,7 +56,7 @@ export class Links {
    * and the publishable key tells it which Appspace is asking.
    *
    * Each question is asked once, with a short time limit: resolving a link
-   * counts a click on the server, so a retry would count it twice.
+   * is recorded as an API call on the server (not a click), so a retry would count it twice.
    *
    * Never throws. A link that cannot be resolved, for a bad network or any
    * other reason, is one to fall back to your own handling for.
@@ -86,7 +86,7 @@ export class Links {
     if (own && own.status === 200 && isAnswer(own.data)) return own.data;
 
     // Tolinku's own reply, even a "no": the host is ours and has answered, and
-    // asking again would count the click twice.
+    // asking again would count a second API call.
     if (own && isTolinkuReply(own.data)) return null;
 
     if (!this.shouldAskApi(link.hostname)) return null;

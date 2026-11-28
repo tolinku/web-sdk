@@ -86,10 +86,10 @@ export class HttpClient {
    * of throwing.
    *
    * For questions where asking twice is worse than not getting an answer:
-   * resolving a link counts as a click on the server, so a retry would count
-   * it again. The caller decides what a reply means, so this hands back the
-   * status and the parsed JSON body. It resolves to null when there was no
-   * readable reply: a network error, a CORS refusal (which a browser reports
+   * resolving a link is recorded as an API call on the server (not a click), so
+   * a retry would count it again. The caller decides what a reply means, so
+   * this hands back the status and the parsed JSON body. It resolves to null
+   * when there was no readable reply: a network error, a CORS refusal (which a browser reports
    * as a network error), the time limit, or a body that is not JSON.
    *
    * `url` is absolute. With `authenticated` the SDK's normal headers go along
